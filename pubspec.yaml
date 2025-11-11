@@ -1,0 +1,40 @@
+name: ofgconnects_mobile
+description: "A Christian Social app."
+publish_to: 'none' 
+version: 1.0.0+1
+
+environment:
+  sdk: '^3.9.0'
+  # The 'flutter: ">=1.17.0"' line is older and redundant with the 
+  # 'sdk: flutter' dependency, so I removed it for clarity.
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+# 1. Backend
+  appwrite: ^20.3.0
+
+# 2. State Management
+  flutter_riverpod: ^2.5.1
+
+# 3. Navigation
+  go_router: ^14.2.0
+
+# Other
+  cupertino_icons: ^1.0.6
+  flutter_dotenv: ^6.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+# This is the main flutter configuration section.
+# The 'assets' section must go inside here.
+flutter:
+  uses-material-design: true
+
+  # <-- THIS IS THE CORRECT LOCATION FOR ASSETS
+  assets:
+    - .env

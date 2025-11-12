@@ -44,6 +44,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final currentUser = await _account.get();
       state = state.copyWith(status: AuthStatus.authenticated, user: currentUser);
     } catch (e) {
+      // --- THIS IS THE FIX ---
+      // Print the error to the console to see what's wrong
+      print('Error in checkUserStatus: $e'); 
+      // --- END OF FIX ---
       state = state.copyWith(status: AuthStatus.unauthenticated);
     }
   }

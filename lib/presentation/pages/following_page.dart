@@ -6,10 +6,9 @@ class FollowingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Following Page'),
-      ),
+    // Return the Center widget directly, NOT a Scaffold
+    return const Center(
+      child: Text('Following Page'),
     );
   }
 }

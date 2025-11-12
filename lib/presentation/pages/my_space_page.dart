@@ -6,10 +6,9 @@ class MySpacePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('My Space Page'),
-      ),
+    // Return the Center widget directly, NOT a Scaffold
+    return const Center(
+      child: Text('My Space Page'),
     );
   }
 }

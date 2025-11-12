@@ -2,15 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; 
-// --- FIX 1: Was 'packaget:', now 'package:' ---
-import 'package:ofgconnects_mobile/presentation/widgets/auth_gate.dart';
+// 1. Import the new router
+import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart';
 
 Future<void> main() async {
-  // Make sure .env is loaded
   WidgetsFlutterBinding.ensureInitialized(); 
   await dotenv.load(fileName: ".env");
   
-  // Wrap your app in a ProviderScope
   runApp(
     const ProviderScope(
       child: MyApp(),
@@ -23,15 +21,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // 2. Use MaterialApp.router
+    return MaterialApp.router(
+      routerConfig: router, // 3. Pass the router config
       title: 'OFG Connects',
       theme: ThemeData.light(), 
       darkTheme: ThemeData.dark(),
       themeMode: ThemeMode.system, 
-      debugShowCheckedModeBanner: false, 
-      
-      // --- FIX 2: Removed 'const' ---
-      home: const AuthGate(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }

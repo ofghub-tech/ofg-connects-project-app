@@ -1,64 +1,75 @@
 // lib/presentation/widgets/main_app_shell.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart'; // Import GoRouter
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/presentation/pages/following_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/home_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/my_space_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/shorts_page.dart';
 
-class MainAppShell extends StatefulWidget {
-  const MainAppShell({super.key});
+// 1. Changed to ConsumerWidget
+class MainAppShell extends ConsumerWidget { 
+  // 2. GoRouter passes the current page as a 'child'
+  final Widget child; 
 
-  @override
-  State<MainAppShell> createState() => _MainAppShellState();
-}
+  const MainAppShell({super.key, required this.child});
 
-class _MainAppShellState extends State<MainAppShell> {
-  int _selectedIndex = 0; // This tracks the active tab
+  // 3. Helper to figure out which nav item is active
+  int _calculateSelectedIndex(BuildContext context) {
+    final String location = GoRouterState.of(context).uri.toString();
+    if (location.startsWith('/home')) {
+      return 0;
+    }
+    if (location.startsWith('/shorts')) {
+      return 1;
+    }
+    if (location.startsWith('/following')) {
+      return 2;
+    }
+    if (location.startsWith('/myspace')) {
+      return 3;
+    }
+    return 0; // Default to home
+  }
 
-  // List of all the main pages
-  static const List<Widget> _pages = <Widget>[
-    HomePage(),
-    ShortsPage(),
-    FollowingPage(),
-    MySpacePage(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+  // 4. Navigation tap handler
+  void _onItemTapped(int index, BuildContext context) {
+    switch (index) {
+      case 0:
+        context.go('/home');
+        break;
+      case 1:
+        context.go('/shorts');
+        break;
+      case 2:
+        context.go('/following');
+        break;
+      case 3:
+        context.go('/myspace');
+        break;
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) { // 5. Added ref
+    final selectedIndex = _calculateSelectedIndex(context);
+
     return Scaffold(
-      // 1. The Top AppBar (replaces your Header.js)
       appBar: AppBar(
         title: const Text('OFG Connects'),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Navigate to SearchPage
-            },
+            onPressed: () { /* TODO: context.go('/search'); */ },
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none),
-            onPressed: () {
-              // TODO: Show notifications
-            },
+            onPressed: () { /* TODO: Show notifications */ },
           ),
         ],
       ),
 
-      // 2. The Main Content Area
-      body: Center(
-        child: _pages.elementAt(_selectedIndex),
-      ),
+      // 6. The Main Content Area - displays the current page
+      body: child, 
 
-      // 3. The Drawer (replaces your Sidebar.js)
+      // 7. The Drawer (Sidebar)
       drawer: Drawer(
         child: Consumer(
           builder: (context, ref, child) {
@@ -70,44 +81,38 @@ class _MainAppShellState extends State<MainAppShell> {
                   accountName: Text(user?.name ?? 'Guest'),
                   accountEmail: Text(user?.email ?? 'No email'),
                   currentAccountPicture: CircleAvatar(
-                    child: Text(user?.name[0] ?? 'G'),
+                    // 8. Safer way to get first initial
+                    child: Text(user?.name.isNotEmpty == true ? user!.name[0] : 'G'),
                   ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.history),
                   title: const Text('History'),
-                  onTap: () {
-                    // TODO: Navigate to HistoryPage
-                  },
+                  onTap: () { /* TODO: context.go('/history'); */ },
                 ),
                 ListTile(
                   leading: const Icon(Icons.watch_later_outlined),
                   title: const Text('Watch Later'),
-                  onTap: () {
-                    // TODO: Navigate to WatchLaterPage
-                  },
+                  onTap: () { /* TODO: context.go('/watchlater'); */ },
                 ),
                 ListTile(
                   leading: const Icon(Icons.thumb_up_alt_outlined),
                   title: const Text('Liked Videos'),
-                  onTap: () {
-                    // TODO: Navigate to LikedVideosPage
-                  },
+                  onTap: () { /* TODO: context.go('/liked'); */ },
                 ),
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.settings_outlined),
                   title: const Text('Settings'),
-                  onTap: () {
-                    // TODO: Navigate to SettingsPage
-                  },
+                  onTap: () { /* TODO: context.go('/settings'); */ },
                 ),
                 ListTile(
                   leading: const Icon(Icons.logout),
                   title: const Text('Logout'),
                   onTap: () {
-                    // Call the logout function
                     ref.read(authProvider.notifier).logoutUser();
+                    // 9. Navigate to login after logout
+                    context.go('/login'); 
                   },
                 ),
               ],
@@ -116,7 +121,7 @@ class _MainAppShellState extends State<MainAppShell> {
         ),
       ),
 
-      // 4. The Bottom Navigation Bar
+      // 10. The Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -140,9 +145,8 @@ class _MainAppShellState extends State<MainAppShell> {
             label: 'My Space',
           ),
         ],
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        // These are important for it to look right
+        currentIndex: selectedIndex,
+        onTap: (index) => _onItemTapped(index, context), // 11. Pass context
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,

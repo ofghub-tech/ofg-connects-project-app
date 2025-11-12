@@ -1,51 +1,54 @@
-// lib/presentation/widgets/suggested_video_card.dart
+// lib/presentation/widgets/video_card.dart
+import 'dart:typed_data'; // Make sure this is imported
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/storage_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 
-class SuggestedVideoCard extends ConsumerWidget {
+class VideoCard extends ConsumerWidget {
   final Video video;
-  const SuggestedVideoCard({super.key, required this.video});
+  const VideoCard({super.key, required this.video});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the provider to get the thumbnail bytes
+    // This provider now returns AsyncValue<Uint8List>
     final thumbnailDataAsync = ref.watch(thumbnailProvider(video.thumbnailId));
 
     return InkWell(
       onTap: () {
-        // Navigate to the new video
         context.go('/home/watch/${video.id}');
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Row(
+      child: Card(
+        margin: const EdgeInsets.all(8.0),
+        elevation: 2.0,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Thumbnail Section (This is the fix)
+            // 1. Thumbnail Section
             thumbnailDataAsync.when(
-              loading: () => Container(
-                width: 160,
-                height: 90,
-                color: Colors.grey[800],
-                child: const Center(child: CircularProgressIndicator()),
+              loading: () => const AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Center(child: CircularProgressIndicator()),
               ),
-              error: (err, stack) => Container(
-                width: 160,
-                height: 90,
-                color: Colors.grey[800],
-                child: const Icon(Icons.error, color: Colors.red),
+              error: (err, stack) => AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  color: Colors.grey[800],
+                  child: const Icon(Icons.error, color: Colors.red),
+                ),
               ),
+              // The data is now a Uint8List
               data: (bytes) {
+                // Check if the byte list is empty
                 if (bytes.isEmpty) {
-                  // This is the placeholder you are seeing
-                  return Container(
-                    width: 160,
-                    height: 90,
-                    color: Colors.grey[800],
-                    child: const Icon(Icons.image_not_supported, color: Colors.white54),
+                  return AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Container(
+                      color: Colors.grey[800],
+                      child: const Icon(Icons.image_not_supported, color: Colors.white54),
+                    ),
                   );
                 }
                 
@@ -53,29 +56,39 @@ class SuggestedVideoCard extends ConsumerWidget {
                 return Image.memory(
                   bytes,
                   fit: BoxFit.cover,
-                  width: 160,
-                  height: 90,
+                  width: double.infinity,
+                  height: 200, 
                 );
               },
             ),
 
-            const SizedBox(width: 12.0),
-
-            // 2. Title and Creator Section
-            Expanded(
-              child: Column(
+            // 2. Title and Subtitle Section (Unchanged)
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    video.title,
-                    style: Theme.of(context).textTheme.titleSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  CircleAvatar(
+                    child: Text(video.creatorName.isNotEmpty ? video.creatorName[0] : 'U'),
                   ),
-                  const SizedBox(height: 4.0),
-                  Text(
-                    video.creatorName,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  const SizedBox(width: 12.0),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          video.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4.0),
+                        Text(
+                          video.creatorName,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

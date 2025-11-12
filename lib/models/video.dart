@@ -24,11 +24,12 @@ class Video {
     return Video(
       id: doc.$id,
       title: doc.data['title'] ?? 'Untitled',
-      thumbnailId: doc.data['thumbnail_id'] ?? '',
-      videoId: doc.data['video_id'] ?? '',
-      creatorId: doc.data['creator_id'] ?? '',
-      creatorName: doc.data['creator_name'] ?? 'Unknown Creator',
-      // Safely access other fields here
+      // --- FIXES ---
+      thumbnailId: doc.data['thumbnailUrl'] ?? '',  // Use 'thumbnailUrl'
+      videoId: doc.data['videoUrl'] ?? '',        // Use 'videoUrl'
+      creatorId: doc.data['userId'] ?? '',        // Use 'userId'
+      creatorName: doc.data['username'] ?? 'Unknown Creator', // Use 'username'
+      // --- END FIXES ---
     );
   }
 }

@@ -1,9 +1,11 @@
 // lib/presentation/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
 
 // --- THIS IS THE FIX ---
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
+// ---
+
 // This line *must* be here for 'VideoCard' to work
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart'; 
 // --- END OF FIX ---
@@ -13,6 +15,7 @@ class HomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // This line will now work
     final videoListAsync = ref.watch(videoListProvider);
 
     return videoListAsync.when(

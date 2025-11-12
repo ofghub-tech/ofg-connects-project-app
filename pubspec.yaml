@@ -20,10 +20,13 @@ dependencies:
 
 # 3. Navigation
   go_router: ^14.2.0
+  video_player: ^2.8.6 # Or latest version
+  path_provider: ^2.1.3 # Or latest version
 
 # Other
   cupertino_icons: ^1.0.6
   flutter_dotenv: ^6.0.0
+  
 
 dev_dependencies:
   flutter_test:

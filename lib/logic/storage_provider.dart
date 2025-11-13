@@ -1,26 +1,23 @@
-// lib/logic/storage_provider.dart
-import 'dart:typed_data'; // Import this
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
+import 'dart:typed_data'; // Make sure this is imported
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // CORRECT
+import 'package:ofgconnects_mobile/api/appwrite_client.dart'; // Ensure this path is correct
 
-// --- ADD THESE IMPORTS ---
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-// THIS IS THE FIX
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; 
-// ---
-
+// This provider is simple and just gives us the Appwrite Storage instance
 final storageProvider = Provider((ref) => AppwriteClient.storage);
 
-// 1. Thumbnail provider
+// 1. Thumbnail provider (This logic was correct)
+// This uses Appwrite's getFilePreview, which returns image bytes.
 final thumbnailProvider = FutureProvider.family<Uint8List, String>((ref, fileId) async {
   if (fileId.isEmpty) {
-    return Uint8List(0); 
+    // Return an empty list instead of throwing an error,
+    // so the UI can just show a placeholder.
+    return Uint8List(0);
   }
 
   final storage = ref.watch(storageProvider);
-  
+
   try {
+    // This directly gets the image bytes from Appwrite
     final result = await storage.getFilePreview(
       bucketId: AppwriteClient.bucketIdThumbnails,
       fileId: fileId,
@@ -28,44 +25,39 @@ final thumbnailProvider = FutureProvider.family<Uint8List, String>((ref, fileId)
     return result;
   } catch (e) {
     print('Error getting thumbnail $fileId: $e');
-    return Uint8List(0);
+    return Uint8List(0); // Return empty on error
   }
 });
 
-// 2. Provider to download a video file and return its local File path
-final videoFileProvider = FutureProvider.family<File, String>((ref, documentId) async {
-  
-  // This line will now work
-  final video = await ref.watch(videoDetailsProvider(documentId).future);
-  // This line will also work
-  final videoFileId = video.videoId; 
 
-  if (videoFileId.isEmpty) {
+// 2. Provider for Video STREAMING (FIXED)
+// This provider gets the video's FILE ID and returns a
+// temporary, streamable URL.
+final videoStreamUrlProvider = FutureProvider.family<String, String>((ref, videoId) async {
+
+  if (videoId.isEmpty) {
     throw Exception('Video file ID is empty');
   }
 
   final storage = ref.watch(storageProvider);
-  
-  // 1. Get the temporary directory
-  final tempDir = await getTemporaryDirectory();
-  final tempPath = tempDir.path;
-  final tempFile = File('$tempPath/$videoFileId.mp4');
 
-  // 2. Check if the file is already downloaded
-  if (await tempFile.exists()) {
-    print('Video $videoFileId already exists in cache.');
-    return tempFile;
+  try {
+    
+    // --- THIS IS THE FIX ---
+    // Use 'getFileView' to get a direct URL string.
+    // This method does NOT need 'await' as it builds the URL locally.
+    final url = storage.getFileView(
+      bucketId: AppwriteClient.bucketIdVideos,
+      fileId: videoId,
+    );
+    
+    // 'url' is a 'String', and the async function will correctly 
+    // return it as a 'Future<String>'.
+    return url; 
+    // --- END FIX ---
+
+  } catch (e) {
+    print('Error getting video stream URL $videoId: $e');
+    throw Exception('Could not get video stream: $e');
   }
-
-  // 3. If not, download the file bytes
-  print('Downloading video $videoFileId...');
-  final bytes = await storage.getFileDownload(
-    bucketId: AppwriteClient.bucketIdVideos,
-    fileId: videoFileId,
-  );
-
-  // 4. Write the bytes to the temporary file
-  await tempFile.writeAsBytes(bytes);
-  print('Video $videoFileId downloaded and saved.');
-  return tempFile;
 });

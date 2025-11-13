@@ -7,7 +7,7 @@ import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dar
 // --- ADD THESE IMPORTS ---
 import 'dart:io';
 import 'package:video_player/video_player.dart';
-import 'package:ofgconnects_mobile/logic/storage_provider.dart';
+import 'package:ofgconnects_mobile/logic/storage_provider.dart'; // This is needed
 import 'package:ofgconnects_mobile/models/video.dart';
 
 // --- THIS IS THE FIX ---
@@ -41,8 +41,24 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   // 4. New method to load the video file
   Future<void> _initializePlayer() async {
     try {
-      final videoFile = await ref.read(videoFileProvider(widget.videoId).future);
-      final controller = VideoPlayerController.file(videoFile);
+      // --- THIS IS THE FIX (STREAMING LOGIC) ---
+      
+      // 1. Get the Video details (which has the File ID)
+      // We use ref.read here because we are in initState
+      final video = await ref.read(videoDetailsProvider(widget.videoId).future);
+
+      if (video.videoId.isEmpty) {
+        throw Exception('Video file ID is empty');
+      }
+
+      // 2. Get the streamable URL using the File ID
+      final streamUrl = await ref.read(videoStreamUrlProvider(video.videoId).future);
+
+      // 3. Initialize the player with the network URL
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(streamUrl)
+      );
+      // --- END FIX ---
       
       setState(() {
         _controller = controller;
@@ -87,7 +103,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           AspectRatio(
             aspectRatio: 16 / 9,
             child: _initializeVideoPlayerFuture == null
-                ? _buildLoadingPlaceholder('Initializing...') 
+                ? _buildLoadingPlaceholder('Initializing...') // This is what you saw
                 : FutureBuilder(
                     future: _initializeVideoPlayerFuture,
                     builder: (context, snapshot) {
@@ -116,6 +132,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                       } else if (snapshot.error != null) {
                         return _buildErrorPlaceholder(snapshot.error.toString());
                       } else {
+                        // This will show "Loading video..." while streaming
                         return _buildLoadingPlaceholder('Loading video...');
                       }
                     },

@@ -4,8 +4,8 @@ import 'package:appwrite/models.dart';
 class Video {
   final String id;
   final String title;
-  final String thumbnailId;
-  final String videoId;
+  final String thumbnailId; // This is poorly named, it will hold the URL
+  final String videoId;     // This is poorly named, it will hold the URL
   final String creatorId;
   final String creatorName;
   // Add any other fields you need, like view_count, description, etc.
@@ -24,12 +24,15 @@ class Video {
     return Video(
       id: doc.$id,
       title: doc.data['title'] ?? 'Untitled',
-      // --- FIXES ---
+
+      // --- THIS IS THE FIX ---
+      // This now correctly reads the URL fields from your database
       thumbnailId: doc.data['thumbnailUrl'] ?? '',  // Use 'thumbnailUrl'
       videoId: doc.data['videoUrl'] ?? '',        // Use 'videoUrl'
-      creatorId: doc.data['userId'] ?? '',        // Use 'userId'
-      creatorName: doc.data['username'] ?? 'Unknown Creator', // Use 'username'
-      // --- END FIXES ---
+      // --- END FIX ---
+      
+      creatorId: doc.data['userId'] ?? '',        
+      creatorName: doc.data['username'] ?? 'Unknown Creator',
     );
   }
 }

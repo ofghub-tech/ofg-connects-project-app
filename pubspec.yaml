@@ -27,6 +27,7 @@ dependencies:
   cupertino_icons: ^1.0.6
   flutter_dotenv: ^6.0.0
   
+# --- FIX: Removed the 'http' package as it's no longer needed ---
 
 dev_dependencies:
   flutter_test:

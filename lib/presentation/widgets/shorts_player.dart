@@ -34,18 +34,32 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   Future<void> _initializePlayer() async {
     try {
-      // Get the downloaded video file
-      final videoFile = await ref.read(videoFileProvider(widget.video.id).future);
+      // --- THIS IS THE FIX (STREAMING LOGIC) ---
       
-      final controller = VideoPlayerController.file(videoFile);
+      // 1. Check if the Video File ID is empty
+      if (widget.video.videoId.isEmpty) {
+        throw Exception('Video file ID is empty');
+      }
+
+      // 2. Get the streamable URL using the File ID
+      // We use ref.read here because we are in initState
+      final streamUrl = await ref.read(videoStreamUrlProvider(widget.video.videoId).future);
+
+      // 3. Initialize the player with the network URL
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(streamUrl)
+      );
+      // --- END FIX ---
       
       setState(() {
         _controller = controller;
-        // Start loading the video, set it to loop, and play it
+        // Start loading the video, set it to loop
         _initializeVideoPlayerFuture = controller.initialize().then((_) {
           _controller?.setLooping(true);
-          // Only auto-play if this is the very first video
-          if (widget.index == 0) {
+
+          // Only auto-play if this is the active video when it's built.
+          final activeIndex = ref.read(activeShortsIndexProvider);
+          if (widget.index == activeIndex) {
             _controller?.play();
           }
           setState(() {});
@@ -68,17 +82,14 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    // ---- THIS IS THE KEY ----
     // Listen to the active page index
-    final activeIndex = ref.watch(activeShortsIndexProvider);
-    
-    // Manage play/pause state based on the active index
-    if (activeIndex == widget.index) {
-      _controller?.play(); // Play if this is the active short
-    } else {
-      _controller?.pause(); // Pause if not
-    }
-    // ---- END OF KEY ----
+    ref.listen<int>(activeShortsIndexProvider, (previousIndex, nextIndex) {
+      if (nextIndex == widget.index) {
+        _controller?.play(); // Play if this is the active short
+      } else {
+        _controller?.pause(); // Pause if not
+      }
+    });
 
     return FutureBuilder(
       future: _initializeVideoPlayerFuture,

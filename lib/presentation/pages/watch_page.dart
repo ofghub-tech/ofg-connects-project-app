@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+// --- ADD THIS IMPORT ---
+import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
+// ---
 import 'package:ofgconnects_mobile/logic/storage_provider.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
 import 'package:video_player/video_player.dart';
-// REMOVED: import 'package:chewie/chewie.dart'; 
-// We will use standard VideoPlayer controls instead.
 
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart'; 
 
@@ -35,20 +36,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     _recordHistory(); 
   }
 
-  // --- THE FIX FOR "VIDEO NOT CHANGING" ---
-  // This function runs whenever you click a new video in the suggestions.
-  // It detects the ID change and reloads the player.
   @override
   void didUpdateWidget(WatchPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoId != widget.videoId) {
-      _disposePlayer(); // 1. Clean up old player
+      _disposePlayer(); 
       setState(() {
-        _isLoading = true; // 2. Show loading again
+        _isLoading = true; 
         _errorMessage = null;
       });
-      _initializePlayer(); // 3. Load new video
-      _recordHistory();    // 4. Record history for new video
+      _initializePlayer(); 
+      _recordHistory();    
     }
   }
 
@@ -56,18 +54,15 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     final user = ref.read(authProvider).user;
     if (user == null) return;
 
+    // --- GRAB THE VIDEO DETAILS TO LOG VIEW COUNT ---
+    final video = await ref.read(videoDetailsProvider(widget.videoId).future);
+    if (video == null) return;
+
     try {
-      final databases = ref.read(databasesProvider);
-      await databases.createDocument(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdHistory,
-        documentId: ID.unique(),
-        data: {
-          'userId': user.$id,
-          'videoId': widget.videoId,
-          'createdAt': DateTime.now().toIso8601String(), // Note: Your DB might use $createdAt auto-field
-        },
-      );
+      // --- Use the Interaction Provider to handle view logging ---
+      // It handles the logic for checking history and incrementing the count
+      await ref.read(interactionProvider).logVideoView(widget.videoId, video.viewCount);
+    
     } catch (e) {
       print('Error recording history: $e');
     }
@@ -75,23 +70,19 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
   Future<void> _initializePlayer() async {
     try {
-      // 1. Fetch the video details 
       final video = await ref.read(videoDetailsProvider(widget.videoId).future);
       
       if (video == null) {
         if (mounted) setState(() => _errorMessage = "Video not found");
         return;
       }
-
-      // 2. Get the Video URL 
-      // FIX: Use 'video.videoId' because your model says that holds the URL
+      
+      // FIX: Use 'video.videoId' which holds the URL
       final streamUrl = await ref.read(videoStreamUrlProvider(video.videoId).future);
 
-      // 3. Initialize VideoPlayerController
       _controller = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
       await _controller!.initialize();
       
-      // Auto-play when loaded
       _controller!.play();
 
       if (mounted) {
@@ -147,7 +138,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                             alignment: Alignment.bottomCenter,
                             children: [
                               VideoPlayer(_controller!),
-                              // Simple Play/Pause Overlay
                               GestureDetector(
                                 onTap: () {
                                   setState(() {
@@ -166,7 +156,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                                   ),
                                 ),
                               ),
-                              // Progress Bar
                               VideoProgressIndicator(_controller!, allowScrubbing: true),
                             ],
                           ),
@@ -189,8 +178,20 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       const SizedBox(height: 8),
+
+                      // --- VIEW COUNT AND LIKE COUNT ---
+                      Text(
+                        // Use the viewCount from the video model
+                        '${video.viewCount} views • ${video.likeCount} likes',
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+
                       // Creator Info
                       _buildCreatorInfo(context, video),
+                      
+                      // --- ACTION BUTTONS (LIKE, SAVE) ---
+                      _buildActionButtons(context, video),
                       
                       const SizedBox(height: 16),
                       const Divider(color: Colors.grey),
@@ -205,11 +206,9 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                             loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
                             error: (e, s) => const Text("Failed to load suggestions", style: TextStyle(color: Colors.white)),
                             data: (videos) {
-                              // FIX: Explicitly cast map result to List<Widget>
                               return Column(
                                 children: videos.map<Widget>((v) => SuggestedVideoCard(
                                   video: v,
-                                  // FIX: Removed 'onTap' here because SuggestedVideoCard handles it internally
                                 )).toList(),
                               );
                             },
@@ -229,6 +228,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   
   // --- WIDGET FOR CREATOR INFO & FOLLOW BUTTON ---
   Widget _buildCreatorInfo(BuildContext context, Video video) {
+    // ... (This widget remains unchanged)
     final isFollowingAsync = ref.watch(isFollowingProvider(video.creatorId));
 
     return Row(
@@ -271,10 +271,77 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       ],
     );
   }
+
+  // ---
+  // --- NEW WIDGET FOR ACTION BUTTONS ---
+  // ---
+  Widget _buildActionButtons(BuildContext context, Video video) {
+    // Watch the new provider to see if the video is liked
+    final isLikedAsync = ref.watch(isLikedProvider(video.id));
+    // Watch the existing provider to see if the video is saved
+    final isSavedAsync = ref.watch(interactionProvider).isVideoSaved(video.id);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          // --- LIKE BUTTON ---
+          isLikedAsync.when(
+            data: (isLiked) {
+              return TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                onPressed: () {
+                  // Call the new toggleLike function
+                  ref.read(interactionProvider).toggleLike(video.id, video.likeCount);
+                },
+                icon: Icon(
+                  isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                  color: isLiked ? Colors.blue : Colors.white,
+                ),
+                label: const Text('Like'),
+              );
+            },
+            loading: () => const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2)),
+            error: (e, s) => const Icon(Icons.error, color: Colors.red),
+          ),
+          
+          const SizedBox(width: 8),
+
+          // --- SAVE (WATCH LATER) BUTTON ---
+          FutureBuilder<bool>(
+            future: isSavedAsync,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2));
+              }
+              final isSaved = snapshot.data ?? false;
+              return TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                onPressed: () async {
+                  // Call the existing toggleWatchLater function
+                  await ref.read(interactionProvider).toggleWatchLater(video.id);
+                  // Manually trigger a rebuild to update the icon
+                  setState(() {}); 
+                },
+                icon: Icon(
+                  isSaved ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+                  color: isSaved ? Colors.blue : Colors.white,
+                ),
+                label: const Text('Save'),
+              );
+            },
+          ),
+          
+          // You can add more buttons here (e.g., Share, Download)
+        ],
+      ),
+    );
+  }
 }
 
 // Helper provider for fetching details of a SINGLE video
 final videoDetailsProvider = FutureProvider.family<Video?, String>((ref, videoId) async {
+  // ... (This provider remains unchanged)
   final databases = ref.watch(databasesProvider);
   try {
     final doc = await databases.getDocument(
@@ -290,8 +357,8 @@ final videoDetailsProvider = FutureProvider.family<Video?, String>((ref, videoId
 
 // Helper provider for fetching suggested videos (excludes current one)
 final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref, currentVideoId) async {
+  // ... (This provider remains unchanged)
   final databases = ref.watch(databasesProvider);
-  // Just fetch 10 random recent videos for now
   final response = await databases.listDocuments(
     databaseId: AppwriteClient.databaseId,
     collectionId: AppwriteClient.collectionIdVideos,
@@ -302,6 +369,5 @@ final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref,
   );
   
   final allVideos = response.documents.map((d) => Video.fromAppwrite(d)).toList();
-  // Filter out the current video
   return allVideos.where((v) => v.id != currentVideoId).toList();
 });

@@ -1,109 +1,139 @@
+// lib/logic/interaction_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; // for databasesProvider
-import 'package:ofgconnects_mobile/models/video.dart';
 
-// --- HELPER FUNCTION ---
-// Replicates the logic of fetching video details from a list of IDs
-Future<List<Video>> _fetchVideosByIds(Databases databases, List<String> videoIds) async {
-  if (videoIds.isEmpty) return [];
+// Provider just for logic functions, no complex state needed here
+final interactionProvider = Provider((ref) => InteractionLogic(ref));
 
-  // Remove duplicates
-  final uniqueIds = videoIds.toSet().toList();
+class InteractionLogic {
+  final Ref ref;
+  InteractionLogic(this.ref);
 
-  try {
-    final response = await databases.listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdVideos,
-      queries: [
-        Query.equal('\$id', uniqueIds),
-        Query.limit(uniqueIds.length), // Ensure we get all of them
-      ],
-    );
+  final Databases _db = AppwriteClient.databases;
 
-    // Map back to Video objects
-    // We re-map them to preserve the original order (e.g., most recent history first)
-    final fetchedVideos = response.documents.map((doc) => Video.fromAppwrite(doc)).toList();
+  // --- REPLICATES: logVideoView function from WatchPage.js ---
+  Future<void> logVideoView(String videoId, int currentViewCount) async {
+    final user = ref.read(authProvider).user;
     
-    List<Video> orderedVideos = [];
-    for (var id in videoIds) {
-      final video = fetchedVideos.firstWhere(
-        (v) => v.id == id, 
-        orElse: () => Video(id: '', title: 'Unknown', thumbnailId: '', videoId: '', creatorId: '', creatorName: '') // Dummy for deleted videos
-      );
-      if (video.id.isNotEmpty) {
-        orderedVideos.add(video);
-      }
-    }
-    return orderedVideos;
+    // 1. If no user, we can't track history (or you can implement IP tracking, but web app uses user ID)
+    if (user == null) return;
 
-  } catch (e) {
-    print('Error fetching video details: $e');
-    return [];
+    try {
+      // 2. Check if user has already seen this video
+      // Query: userId == current && videoId == current
+      final historyCheck = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdHistory,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1),
+        ],
+      );
+
+      // 3. If history exists, STOP. Do not increment view count.
+      if (historyCheck.total > 0) {
+        return;
+      }
+
+      // 4. If NEW view:
+      // A. Create History Record
+      await _db.createDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdHistory,
+        documentId: ID.unique(),
+        data: {
+          'userId': user.$id,
+          'videoId': videoId,
+          'createdAt': DateTime.now().toIso8601String(),
+        },
+        permissions: [
+          Permission.read(Role.user(user.$id)), 
+          Permission.write(Role.user(user.$id))
+        ]
+      );
+
+      // B. Increment View Count on Video Document
+      await _db.updateDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdVideos,
+        documentId: videoId,
+        data: {
+          'view_count': currentViewCount + 1,
+        },
+      );
+      
+    } catch (e) {
+      print("Error logging view: $e");
+    }
+  }
+
+  // --- REPLICATES: handleToggleSave function from WatchPage.js ---
+  Future<bool> toggleWatchLater(String videoId) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) throw Exception("User must be logged in");
+
+    try {
+      // 1. Check if already saved
+      final check = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdWatchLater,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1),
+        ],
+      );
+
+      if (check.total > 0) {
+        // 2. EXISTS -> DELETE (Unsave)
+        final docId = check.documents.first.$id;
+        await _db.deleteDocument(
+          databaseId: AppwriteClient.databaseId,
+          collectionId: AppwriteClient.collectionIdWatchLater,
+          documentId: docId,
+        );
+        return false; // Not saved anymore
+      } else {
+        // 3. DOES NOT EXIST -> CREATE (Save)
+        await _db.createDocument(
+          databaseId: AppwriteClient.databaseId,
+          collectionId: AppwriteClient.collectionIdWatchLater,
+          documentId: ID.unique(),
+          data: {
+            'userId': user.$id,
+            'videoId': videoId,
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+          permissions: [
+             Permission.read(Role.user(user.$id)), 
+             Permission.write(Role.user(user.$id))
+          ]
+        );
+        return true; // Now saved
+      }
+    } catch (e) {
+      print("Error toggling watch later: $e");
+      rethrow;
+    }
+  }
+  
+  // --- Helper to check initial state ---
+  Future<bool> isVideoSaved(String videoId) async {
+     final user = ref.read(authProvider).user;
+     if (user == null) return false;
+     
+     final check = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdWatchLater,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1),
+        ],
+      );
+      return check.total > 0;
   }
 }
-
-// 1. LIKED VIDEOS PROVIDER
-final likedVideosProvider = FutureProvider<List<Video>>((ref) async {
-  final databases = ref.watch(databasesProvider);
-  final user = ref.watch(authProvider).user;
-  
-  if (user == null) return [];
-
-  final response = await databases.listDocuments(
-    databaseId: AppwriteClient.databaseId,
-    collectionId: AppwriteClient.collectionIdLikes,
-    queries: [
-      Query.equal('userId', user.$id),
-      Query.orderDesc('\$createdAt'),
-      Query.limit(50),
-    ],
-  );
-
-  final videoIds = response.documents.map((doc) => doc.data['videoId'] as String).toList();
-  return _fetchVideosByIds(databases, videoIds);
-});
-
-// 2. WATCH LATER PROVIDER
-final watchLaterProvider = FutureProvider<List<Video>>((ref) async {
-  final databases = ref.watch(databasesProvider);
-  final user = ref.watch(authProvider).user;
-  
-  if (user == null) return [];
-
-  final response = await databases.listDocuments(
-    databaseId: AppwriteClient.databaseId,
-    collectionId: AppwriteClient.collectionIdWatchLater,
-    queries: [
-      Query.equal('userId', user.$id),
-      Query.orderDesc('\$createdAt'),
-      Query.limit(50),
-    ],
-  );
-
-  final videoIds = response.documents.map((doc) => doc.data['videoId'] as String).toList();
-  return _fetchVideosByIds(databases, videoIds);
-});
-
-// 3. HISTORY PROVIDER
-final historyProvider = FutureProvider<List<Video>>((ref) async {
-  final databases = ref.watch(databasesProvider);
-  final user = ref.watch(authProvider).user;
-  
-  if (user == null) return [];
-
-  final response = await databases.listDocuments(
-    databaseId: AppwriteClient.databaseId,
-    collectionId: AppwriteClient.collectionIdHistory,
-    queries: [
-      Query.equal('userId', user.$id),
-      Query.orderDesc('\$createdAt'),
-      Query.limit(50),
-    ],
-  );
-
-  final videoIds = response.documents.map((doc) => doc.data['videoId'] as String).toList();
-  return _fetchVideosByIds(databases, videoIds);
-});

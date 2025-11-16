@@ -1,38 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
+// --- THIS IS THE FIX ---
+// We import the file containing the `watchLaterProvider`
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
+// --- END FIX ---
 
 class WatchLaterPage extends ConsumerWidget {
-  const WatchLaterPage({super.key});
+  const WatchLaterPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // This line will now work correctly
     final videosAsync = ref.watch(watchLaterProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Watch Later')),
       body: videosAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
         data: (videos) {
           if (videos.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('Your list is empty.'),
-                ],
-              ),
-            );
+            return const Center(child: Text('Your watch later list is empty.'));
           }
           return ListView.builder(
             itemCount: videos.length,
-            itemBuilder: (context, index) => VideoCard(video: videos[index]),
+            itemBuilder: (context, index) {
+              return VideoCard(video: videos[index]);
+            },
           );
         },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
   }

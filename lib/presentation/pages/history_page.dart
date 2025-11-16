@@ -1,38 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
+// --- THIS IS THE FIX ---
+// We import the file containing the `historyProvider`
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
+// --- END FIX ---
 
 class HistoryPage extends ConsumerWidget {
-  const HistoryPage({super.key});
+  const HistoryPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // This line will now work correctly
     final videosAsync = ref.watch(historyProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('History')),
       body: videosAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
         data: (videos) {
           if (videos.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('No watch history yet.'),
-                ],
-              ),
-            );
+            return const Center(child: Text('No videos in your history.'));
           }
           return ListView.builder(
             itemCount: videos.length,
-            itemBuilder: (context, index) => VideoCard(video: videos[index]),
+            itemBuilder: (context, index) {
+              return VideoCard(video: videos[index]);
+            },
           );
         },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
   }

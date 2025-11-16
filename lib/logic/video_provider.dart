@@ -21,7 +21,6 @@ final videoListProvider = FutureProvider<List<Video>>((ref) async {
   return response.documents.map((doc) => Video.fromAppwrite(doc)).toList();
 });
 
-// --- NEW ---
 // 3. Provider that fetches ONLY SHORTS
 final shortsListProvider = FutureProvider<List<Video>>((ref) async {
   final databases = ref.watch(databasesProvider);
@@ -38,7 +37,6 @@ final shortsListProvider = FutureProvider<List<Video>>((ref) async {
   return response.documents.map((doc) => Video.fromAppwrite(doc)).toList();
 });
 
-// --- NEW ---
 // 4. Provider that fetches ONLY NORMAL VIDEOS
 final videosListProvider = FutureProvider<List<Video>>((ref) async {
   final databases = ref.watch(databasesProvider);
@@ -54,12 +52,10 @@ final videosListProvider = FutureProvider<List<Video>>((ref) async {
   
   return response.documents.map((doc) => Video.fromAppwrite(doc)).toList();
 });
-// --- END NEW ---
 
 
-// 5. The provider that fetches a SINGLE video's details (Unchanged)
+// 5. The provider that fetches a SINGLE video's details
 final videoDetailsProvider = FutureProvider.family<Video, String>((ref, videoId) async {
-  // ... (rest of your existing code is fine) ...
   final databases = ref.watch(databasesProvider);
 
   final document = await databases.getDocument(
@@ -72,9 +68,8 @@ final videoDetailsProvider = FutureProvider.family<Video, String>((ref, videoId)
 });
 
 
-// 6. The provider that fetches all videos for the CURRENT user (Unchanged)
+// 6. The provider that fetches all videos for the CURRENT user
 final userVideosProvider = FutureProvider<List<Video>>((ref) async {
-  // ... (rest of your existing code is fine) ...
   final databases = ref.watch(databasesProvider);
   final user = ref.watch(authProvider).user;
 
@@ -93,9 +88,8 @@ final userVideosProvider = FutureProvider<List<Video>>((ref) async {
 });
 
 
-// 7. The provider that fetches videos from FOLLOWED users (Unchanged)
+// 7. The provider that fetches videos from FOLLOWED users
 final followingVideosProvider = FutureProvider<List<Video>>((ref) async {
-  // ... (rest of your existing code is fine) ...
   final databases = ref.watch(databasesProvider);
   final currentUserId = ref.watch(authProvider).user?.$id;
 
@@ -123,4 +117,89 @@ final followingVideosProvider = FutureProvider<List<Video>>((ref) async {
   );
 
   return videoResponse.documents.map((doc) => Video.fromAppwrite(doc)).toList();
+});
+
+// --- NEWLY ADDED PROVIDERS ---
+
+// Base function to get videos from a "link" collection (History, Likes, etc.)
+// This avoids duplicating code.
+Future<List<Video>> _getVideosFromLinkCollection({
+  required Ref ref,
+  required String collectionId,
+  required String userId,
+  required String videoIdField,
+}) async {
+  final databases = ref.watch(databasesProvider);
+
+  // 1. Get all documents from the link collection (e.g., all history items)
+  final linkDocsResponse = await databases.listDocuments(
+    databaseId: AppwriteClient.databaseId,
+    collectionId: collectionId,
+    queries: [
+      Query.equal('userId', userId),
+      Query.orderDesc('\$createdAt'),
+    ],
+  );
+
+  // 2. Extract all the unique video IDs from those documents
+  final videoIds = linkDocsResponse.documents
+      .map((doc) => doc.data[videoIdField] as String?)
+      .where((id) => id != null)
+      .toSet() // Use a Set to remove duplicates
+      .toList();
+
+  if (videoIds.isEmpty) {
+    return [];
+  }
+
+  // 3. Fetch all videos that match those IDs
+  final videoResponse = await databases.listDocuments(
+    databaseId: AppwriteClient.databaseId,
+    collectionId: AppwriteClient.collectionIdVideos,
+    queries: [
+      Query.equal('\$id', videoIds), // Find all videos whose ID is in our list
+    ],
+  );
+
+  // 4. Convert to Video objects and return
+  return videoResponse.documents.map((doc) => Video.fromAppwrite(doc)).toList();
+}
+
+// 8. Provider for Liked Videos
+final likedVideosProvider = FutureProvider<List<Video>>((ref) async {
+  final user = ref.watch(authProvider).user;
+  if (user == null) return [];
+
+  return _getVideosFromLinkCollection(
+    ref: ref,
+    collectionId: AppwriteClient.collectionIdLikes,
+    userId: user.$id,
+    videoIdField: 'videoId', // The field in the 'likes' collection that holds the video ID
+  );
+});
+
+// 9. Provider for Watch Later
+final watchLaterProvider = FutureProvider<List<Video>>((ref) async {
+  final user = ref.watch(authProvider).user;
+  if (user == null) return [];
+
+  return _getVideosFromLinkCollection(
+    ref: ref,
+    collectionId: AppwriteClient.collectionIdWatchLater,
+    userId: user.$id,
+    videoIdField: 'videoId', // The field in the 'watch_later' collection
+  );
+});
+
+// 10. Provider for History
+final historyProvider = FutureProvider<List<Video>>((ref) async {
+  final user = ref.watch(authProvider).user;
+  if (user == null) return [];
+
+  return _getVideosFromLinkCollection(
+    ref: ref,
+    collectionId: AppwriteClient.collectionIdHistory,
+    userId: user.$id,
+    videoIdField: 'videoId', // The field in the 'history' collection
+  );
 });

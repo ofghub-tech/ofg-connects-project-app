@@ -4,35 +4,57 @@ import 'package:appwrite/models.dart';
 class Video {
   final String id;
   final String title;
-  final String thumbnailId; // This is poorly named, it will hold the URL
-  final String videoId;     // This is poorly named, it will hold the URL
+  final String description;
+  final String thumbnailUrl; // This field is for the URL
+  final String videoUrl;     // This field is for the URL
   final String creatorId;
   final String creatorName;
-  // Add any other fields you need, like view_count, description, etc.
+  final String category;
+  final List<String> tags;
+  final int viewCount;
+  final int likeCount;
+  final DateTime createdAt;
+
+  // --- FIX ---
+  // These are getters that point to the real URL fields.
+  // This makes the model compatible with your existing UI code
+  // that still uses `video.videoId` and `video.thumbnailId`.
+  String get videoId => videoUrl;
+  String get thumbnailId => thumbnailUrl;
+  // --- END FIX ---
+
 
   Video({
     required this.id,
     required this.title,
-    required this.thumbnailId,
-    required this.videoId,
+    required this.description,
+    required this.thumbnailUrl,
+    required this.videoUrl,
     required this.creatorId,
     required this.creatorName,
+    required this.category,
+    required this.tags,
+    required this.viewCount,
+    required this.likeCount,
+    required this.createdAt,
   });
 
-  // A factory constructor to create a Video from an Appwrite document
   factory Video.fromAppwrite(Document doc) {
+    // Read from the database fields `thumbnailUrl` and `videoUrl`
+    // just like the web app does.
     return Video(
       id: doc.$id,
       title: doc.data['title'] ?? 'Untitled',
-
-      // --- THIS IS THE FIX ---
-      // This now correctly reads the URL fields from your database
-      thumbnailId: doc.data['thumbnailUrl'] ?? '',  // Use 'thumbnailUrl'
-      videoId: doc.data['videoUrl'] ?? '',        // Use 'videoUrl'
-      // --- END FIX ---
-      
-      creatorId: doc.data['userId'] ?? '',        
-      creatorName: doc.data['username'] ?? 'Unknown Creator',
+      description: doc.data['description'] ?? '',
+      thumbnailUrl: doc.data['thumbnailUrl'] ?? '', // Read from correct DB field
+      videoUrl: doc.data['videoUrl'] ?? '',       // Read from correct DB field
+      creatorId: doc.data['userId'] ?? '',
+      creatorName: doc.data['username'] ?? 'Unknown',
+      category: doc.data['category'] ?? 'general',
+      tags: (doc.data['tags'] as String? ?? '').split(',').map((e) => e.trim()).toList(),
+      viewCount: doc.data['view_count'] ?? 0,
+      likeCount: doc.data['likeCount'] ?? 0,
+      createdAt: DateTime.parse(doc.$createdAt),
     );
   }
 }

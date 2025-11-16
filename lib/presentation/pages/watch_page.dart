@@ -1,25 +1,22 @@
-// lib/presentation/pages/watch_page.dart
+import 'package:appwrite/appwrite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:ofgconnects_mobile/api/appwrite_client.dart';
+import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:ofgconnects_mobile/logic/storage_provider.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
-
-// --- ADD THESE IMPORTS ---
-import 'dart:io';
-import 'package:video_player/video_player.dart';
-import 'package:ofgconnects_mobile/logic/storage_provider.dart'; // This is needed
 import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
+import 'package:video_player/video_player.dart';
+// REMOVED: import 'package:chewie/chewie.dart'; 
+// We will use standard VideoPlayer controls instead.
 
-// --- THIS IS THE FIX ---
-// No more name conflict, so we can import the whole file
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart'; 
-// --- END OF FIX ---
 
-
-// 1. Convert to ConsumerStatefulWidget
 class WatchPage extends ConsumerStatefulWidget {
-  final String videoId;
-  
+  final String videoId; 
+
   const WatchPage({super.key, required this.videoId});
 
   @override
@@ -27,263 +24,284 @@ class WatchPage extends ConsumerStatefulWidget {
 }
 
 class _WatchPageState extends ConsumerState<WatchPage> {
-  // 2. Add Controller and Future variables
   VideoPlayerController? _controller;
-  Future<void>? _initializeVideoPlayerFuture;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // 3. Start initializing the player
     _initializePlayer();
+    _recordHistory(); 
   }
 
-  // 4. New method to load the video file
-  Future<void> _initializePlayer() async {
-    try {
-      // --- THIS IS THE FIX (STREAMING LOGIC) ---
-      
-      // 1. Get the Video details (which has the File ID)
-      // We use ref.read here because we are in initState
-      final video = await ref.read(videoDetailsProvider(widget.videoId).future);
-
-      if (video.videoId.isEmpty) {
-        throw Exception('Video file ID is empty');
-      }
-
-      // 2. Get the streamable URL using the File ID
-      final streamUrl = await ref.read(videoStreamUrlProvider(video.videoId).future);
-
-      // 3. Initialize the player with the network URL
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(streamUrl)
-      );
-      // --- END FIX ---
-      
+  // --- THE FIX FOR "VIDEO NOT CHANGING" ---
+  // This function runs whenever you click a new video in the suggestions.
+  // It detects the ID change and reloads the player.
+  @override
+  void didUpdateWidget(WatchPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoId != widget.videoId) {
+      _disposePlayer(); // 1. Clean up old player
       setState(() {
-        _controller = controller;
-        _initializeVideoPlayerFuture = controller.initialize().then((_) {
-          _controller?.play();
-          setState(() {});
-        });
+        _isLoading = true; // 2. Show loading again
+        _errorMessage = null;
       });
-
-    } catch (e) {
-      print("Error initializing video player: $e");
-      setState(() {
-        _initializeVideoPlayerFuture = Future.error(e);
-      });
+      _initializePlayer(); // 3. Load new video
+      _recordHistory();    // 4. Record history for new video
     }
   }
 
-  // 5. Clean up the controller when the page is closed
+  Future<void> _recordHistory() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    try {
+      final databases = ref.read(databasesProvider);
+      await databases.createDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdHistory,
+        documentId: ID.unique(),
+        data: {
+          'userId': user.$id,
+          'videoId': widget.videoId,
+          'createdAt': DateTime.now().toIso8601String(), // Note: Your DB might use $createdAt auto-field
+        },
+      );
+    } catch (e) {
+      print('Error recording history: $e');
+    }
+  }
+
+  Future<void> _initializePlayer() async {
+    try {
+      // 1. Fetch the video details 
+      final video = await ref.read(videoDetailsProvider(widget.videoId).future);
+      
+      if (video == null) {
+        if (mounted) setState(() => _errorMessage = "Video not found");
+        return;
+      }
+
+      // 2. Get the Video URL 
+      // FIX: Use 'video.videoId' because your model says that holds the URL
+      final streamUrl = await ref.read(videoStreamUrlProvider(video.videoId).future);
+
+      // 3. Initialize VideoPlayerController
+      _controller = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
+      await _controller!.initialize();
+      
+      // Auto-play when loaded
+      _controller!.play();
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Error initializing player: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = "Error loading video: $e";
+        });
+      }
+    }
+  }
+
+  void _disposePlayer() {
+    _controller?.dispose();
+    _controller = null;
+  }
+
   @override
   void dispose() {
-    _controller?.dispose();
+    _disposePlayer();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final allVideosAsync = ref.watch(videoListProvider);
-    final videoDetailsAsync = ref.watch(videoDetailsProvider(widget.videoId));
+    final videoAsync = ref.watch(videoDetailsProvider(widget.videoId));
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: videoDetailsAsync.when(
-          data: (video) => Text(video.title),
-          loading: () => const Text('Loading...'),
-          error: (e, s) => const Text('Error'),
-        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
       ),
-      body: ListView(
-        children: [
-          
-          // --- VIDEO PLAYER UI ---
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: _initializeVideoPlayerFuture == null
-                ? _buildLoadingPlaceholder('Initializing...') // This is what you saw
-                : FutureBuilder(
-                    future: _initializeVideoPlayerFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done && snapshot.error == null) {
-                        return Stack(
-                          alignment: Alignment.bottomCenter,
-                          children: [
-                            VideoPlayer(_controller!),
-                            IconButton(
-                              icon: Icon(
-                                _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                                color: Colors.white,
-                                size: 50,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _controller!.value.isPlaying
-                                      ? _controller!.pause()
-                                      : _controller!.play();
-                                });
-                              },
-                            ),
-                            VideoProgressIndicator(_controller!, allowScrubbing: true),
-                          ],
-                        );
-                      } else if (snapshot.error != null) {
-                        return _buildErrorPlaceholder(snapshot.error.toString());
-                      } else {
-                        // This will show "Loading video..." while streaming
-                        return _buildLoadingPlaceholder('Loading video...');
-                      }
-                    },
-                  ),
-          ),
-          
-          // --- CREATOR INFO & FOLLOW BUTTON ---
-          videoDetailsAsync.when(
-            data: (video) => _buildCreatorInfo(context, video),
-            loading: () => const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, s) => const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text('Error loading video details.'),
-            ),
-          ),
-
-          const Divider(),
-
-          // --- Suggested Videos List ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              'Suggested Videos',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          
-          allVideosAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => const Center(child: Text('Could not load suggestions')),
-            data: (allVideos) {
-              final suggestedVideos = allVideos.where((v) => v.id != widget.videoId).toList();
-
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: suggestedVideos.length,
-                itemBuilder: (context, index) {
-                  final suggestedVideo = suggestedVideos[index];
-                  return SuggestedVideoCard(video: suggestedVideo);
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- WIDGET FOR CREATOR INFO & FOLLOW BUTTON ---
-  Widget _buildCreatorInfo(BuildContext context, Video video) {
-    // This will now work
-    final isFollowingAsync = ref.watch(isFollowingProvider(video.creatorId));
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Creator Avatar & Name
-          Row(
-            children: [
-              CircleAvatar(
-                child: Text(video.creatorName.isNotEmpty ? video.creatorName[0] : 'U'),
-              ),
-              const SizedBox(width: 12.0),
-              Text(
-                video.creatorName,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ],
-          ),
-
-          // Follow/Unfollow Button
-          isFollowingAsync.when(
-            data: (isFollowing) {
-              return ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isFollowing ? Colors.grey[800] : Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () {
-                  // This will also work
-                  final notifier = ref.read(subscriptionNotifierProvider.notifier);
-                  if (isFollowing) {
-                    notifier.unfollowUser(video.creatorId);
-                  } else {
-                    notifier.followUser(video);
-                  }
-                },
-                child: Text(isFollowing ? 'Following' : 'Follow'),
-              );
-            },
-            loading: () => const ElevatedButton(
-              onPressed: null,
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-            error: (e, s) => ElevatedButton(
-              onPressed: null,
-              child: const Icon(Icons.error, color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- HELPER WIDGETS FOR THE PLAYER ---
-  Widget _buildLoadingPlaceholder(String text) {
-    return Container(
-      color: Colors.black,
-      child: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(text, style: const TextStyle(color: Colors.white)),
+            // --- VIDEO PLAYER AREA ---
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Container(
+                color: Colors.black,
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _errorMessage != null
+                        ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white)))
+                        : Stack(
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              VideoPlayer(_controller!),
+                              // Simple Play/Pause Overlay
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _controller!.value.isPlaying
+                                        ? _controller!.pause()
+                                        : _controller!.play();
+                                  });
+                                },
+                                child: Center(
+                                  child: Icon(
+                                    _controller!.value.isPlaying
+                                        ? Icons.pause_circle_outline
+                                        : Icons.play_circle_outline,
+                                    size: 64,
+                                    color: Colors.white.withOpacity(0.7),
+                                  ),
+                                ),
+                              ),
+                              // Progress Bar
+                              VideoProgressIndicator(_controller!, allowScrubbing: true),
+                            ],
+                          ),
+              ),
+            ),
+
+            // --- VIDEO DETAILS & SUGGESTIONS ---
+            Expanded(
+              child: videoAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, stack) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.white))),
+                data: (video) {
+                  if (video == null) return const Center(child: Text('Video not found', style: TextStyle(color: Colors.white)));
+                  return ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      // Title
+                      Text(
+                        video.title,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      // Creator Info
+                      _buildCreatorInfo(context, video),
+                      
+                      const SizedBox(height: 16),
+                      const Divider(color: Colors.grey),
+                      const Text("Suggested Videos", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 8),
+                      
+                      // Suggested Videos List
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final suggestedAsync = ref.watch(suggestedVideosProvider(widget.videoId));
+                          return suggestedAsync.when(
+                            loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+                            error: (e, s) => const Text("Failed to load suggestions", style: TextStyle(color: Colors.white)),
+                            data: (videos) {
+                              // FIX: Explicitly cast map result to List<Widget>
+                              return Column(
+                                children: videos.map<Widget>((v) => SuggestedVideoCard(
+                                  video: v,
+                                  // FIX: Removed 'onTap' here because SuggestedVideoCard handles it internally
+                                )).toList(),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+  
+  // --- WIDGET FOR CREATOR INFO & FOLLOW BUTTON ---
+  Widget _buildCreatorInfo(BuildContext context, Video video) {
+    final isFollowingAsync = ref.watch(isFollowingProvider(video.creatorId));
 
-  Widget _buildErrorPlaceholder(String error) {
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 50),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading video: $error',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              child: Text(video.creatorName.isNotEmpty ? video.creatorName[0] : 'U'),
+            ),
+            const SizedBox(width: 12.0),
+            Text(
+              video.creatorName,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
+            ),
+          ],
         ),
-      ),
+
+        isFollowingAsync.when(
+          data: (isFollowing) {
+            return ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isFollowing ? Colors.grey[800] : Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final notifier = ref.read(subscriptionNotifierProvider.notifier);
+                if (isFollowing) {
+                  notifier.unfollowUser(video.creatorId);
+                } else {
+                  notifier.followUser(video);
+                }
+              },
+              child: Text(isFollowing ? 'Following' : 'Follow'),
+            );
+          },
+          loading: () => const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+          error: (e, s) => const Icon(Icons.error, color: Colors.red),
+        ),
+      ],
     );
   }
 }
+
+// Helper provider for fetching details of a SINGLE video
+final videoDetailsProvider = FutureProvider.family<Video?, String>((ref, videoId) async {
+  final databases = ref.watch(databasesProvider);
+  try {
+    final doc = await databases.getDocument(
+      databaseId: AppwriteClient.databaseId,
+      collectionId: AppwriteClient.collectionIdVideos,
+      documentId: videoId,
+    );
+    return Video.fromAppwrite(doc);
+  } catch (e) {
+    return null;
+  }
+});
+
+// Helper provider for fetching suggested videos (excludes current one)
+final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref, currentVideoId) async {
+  final databases = ref.watch(databasesProvider);
+  // Just fetch 10 random recent videos for now
+  final response = await databases.listDocuments(
+    databaseId: AppwriteClient.databaseId,
+    collectionId: AppwriteClient.collectionIdVideos,
+    queries: [
+      Query.limit(10),
+      Query.orderDesc('\$createdAt'),
+    ],
+  );
+  
+  final allVideos = response.documents.map((d) => Video.fromAppwrite(d)).toList();
+  // Filter out the current video
+  return allVideos.where((v) => v.id != currentVideoId).toList();
+});

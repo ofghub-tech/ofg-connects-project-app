@@ -9,24 +9,26 @@ import 'package:ofgconnects_mobile/presentation/pages/watch_page.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/auth_gate.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/main_app_shell.dart';
 
+// --- ADDED NEW PAGE IMPORTS ---
+import 'package:ofgconnects_mobile/presentation/pages/history_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/liked_videos_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/watch_later_page.dart';
+// ---
+
 final router = GoRouter(
-  initialLocation: '/', // Start at the AuthGate
+  initialLocation: '/', 
   routes: [
-    // This route shows the loading screen while checking auth
     GoRoute(
       path: '/',
       builder: (context, state) => const AuthGate(),
     ),
-    // This route is for the login page
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginPage(),
     ),
     
-    // This ShellRoute wraps all main pages with the Bottom Nav Bar
     ShellRoute(
       builder: (context, state, child) {
-        // MainAppShell will now display 'child' as the main content
         return MainAppShell(child: child);
       },
       routes: [
@@ -34,8 +36,6 @@ final router = GoRouter(
           path: '/home',
           builder: (context, state) => const HomePage(),
           routes: [
-            // This is the new nested route for the WatchPage
-            // It will have a path like /home/watch/VIDEO_ID
             GoRoute(
               path: 'watch/:videoId',
               builder: (context, state) {
@@ -46,8 +46,15 @@ final router = GoRouter(
           ],
         ),
         GoRoute(
-          path: '/shorts',
-          builder: (context, state) => const ShortsPage(),
+          path: '/shorts', // Stays the same path
+          builder: (context, state) {
+            // --- THIS IS THE FIX ---
+            // Get the 'id' from the query parameter (e.g., /shorts?id=123)
+            final videoId = state.uri.queryParameters['id'];
+            // Pass it to the ShortsPage
+            return ShortsPage(videoId: videoId);
+            // --- END FIX ---
+          },
         ),
         GoRoute(
           path: '/following',
@@ -56,6 +63,20 @@ final router = GoRouter(
         GoRoute(
           path: '/myspace',
           builder: (context, state) => const MySpacePage(),
+        ),
+
+        // --- User Library Routes (from previous step) ---
+        GoRoute(
+          path: '/history',
+          builder: (context, state) => const HistoryPage(),
+        ),
+        GoRoute(
+          path: '/liked',
+          builder: (context, state) => const LikedVideosPage(),
+        ),
+        GoRoute(
+          path: '/watchlater',
+          builder: (context, state) => const WatchLaterPage(),
         ),
       ],
     ),

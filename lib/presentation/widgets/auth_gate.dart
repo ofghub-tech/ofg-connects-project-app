@@ -4,33 +4,56 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
-class AuthGate extends ConsumerWidget {
+class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Watch the auth state
+  ConsumerState<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<AuthGate> {
+  // guard so we only register the listener once (and inside build)
+  bool _listenerRegistered = false;
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // 2. Listen for changes. 
-    // This will trigger ONLY when the auth provider actually updates.
-    ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.status == AuthStatus.authenticated) {
-        context.go('/home');
-      } else if (next.status == AuthStatus.unauthenticated) {
-        context.go('/login');
-      }
-    });
+    // Register listener inside build (Riverpod requires this).
+    // We ensure it runs only once to avoid duplicate registrations.
+    if (!_listenerRegistered) {
+      _listenerRegistered = true;
 
-    // 3. Show loading screen while waiting
-    return const Scaffold(
+      ref.listen<AuthState>(authProvider, (previous, next) {
+        // don't navigate when a loading check is in progress
+        if (next.status == AuthStatus.loading) return;
+
+        if (next.status == AuthStatus.authenticated) {
+          if (mounted) context.go('/home');
+        } else if (next.status == AuthStatus.unauthenticated) {
+          if (mounted) context.go('/login');
+        }
+      });
+    }
+
+    // Show relevant UI while auth state resolves.
+    // Navigation is handled by the listener above.
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading application...'),
+            if (authState.status == AuthStatus.loading) ...[
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Checking authentication...'),
+            ] else if (authState.status == AuthStatus.authenticated) ...[
+              // Empty view — listener will navigate to /home
+              const SizedBox.shrink(),
+            ] else ...[
+              // Empty view — listener will navigate to /login
+              const SizedBox.shrink(),
+            ],
           ],
         ),
       ),

@@ -3,27 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-// We no longer import pages here
 
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 1. Watch the auth state
     final authState = ref.watch(authProvider);
 
-    // Use a listener to redirect user when auth state changes
+    // 2. Listen for changes. 
+    // This will trigger ONLY when the auth provider actually updates.
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
-        context.go('/home'); // Go to home page
-      }
-      if (next.status == AuthStatus.unauthenticated) {
-        context.go('/login'); // Go to login page
+        context.go('/home');
+      } else if (next.status == AuthStatus.unauthenticated) {
+        context.go('/login');
       }
     });
 
-    // While loading, show a simple loading screen.
-    // The listener will handle the redirect when auth status is determined.
+    // 3. Show loading screen while waiting
     return const Scaffold(
       body: Center(
         child: Column(

@@ -15,14 +15,11 @@ class Video {
   final int likeCount;
   final DateTime createdAt;
 
-  // --- FIX ---
-  // These are getters that point to the real URL fields.
-  // This makes the model compatible with your existing UI code
-  // that still uses `video.videoId` and `video.thumbnailId`.
-  String get videoId => videoUrl;
+  // --- BACKWARD COMPATIBILITY GETTERS ---
+  // These map the old property names to the new URL fields
   String get thumbnailId => thumbnailUrl;
-  // --- END FIX ---
-
+  String get videoId => videoUrl; 
+  // --------------------------------------
 
   Video({
     required this.id,
@@ -40,14 +37,12 @@ class Video {
   });
 
   factory Video.fromAppwrite(Document doc) {
-    // Read from the database fields `thumbnailUrl` and `videoUrl`
-    // just like the web app does.
     return Video(
       id: doc.$id,
       title: doc.data['title'] ?? 'Untitled',
       description: doc.data['description'] ?? '',
-      thumbnailUrl: doc.data['thumbnailUrl'] ?? '', // Read from correct DB field
-      videoUrl: doc.data['videoUrl'] ?? '',       // Read from correct DB field
+      thumbnailUrl: doc.data['thumbnailUrl'] ?? '',
+      videoUrl: doc.data['videoUrl'] ?? '',
       creatorId: doc.data['userId'] ?? '',
       creatorName: doc.data['username'] ?? 'Unknown',
       category: doc.data['category'] ?? 'general',

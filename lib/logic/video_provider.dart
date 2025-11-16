@@ -203,3 +203,22 @@ final historyProvider = FutureProvider<List<Video>>((ref) async {
     videoIdField: 'videoId', // The field in the 'history' collection
   );
 });
+
+// 11. Provider for Suggested Videos
+final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref, currentVideoId) async {
+  final databases = ref.watch(databasesProvider);
+  
+  final response = await databases.listDocuments(
+    databaseId: AppwriteClient.databaseId,
+    collectionId: AppwriteClient.collectionIdVideos,
+    queries: [
+      Query.limit(10),
+      Query.orderDesc('\$createdAt'),
+    ],
+  );
+  
+  final allVideos = response.documents.map((d) => Video.fromAppwrite(d)).toList();
+  
+  // Filter out the video currently being watched
+  return allVideos.where((v) => v.id != currentVideoId).toList();
+});

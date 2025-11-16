@@ -13,10 +13,12 @@ import 'package:ofgconnects_mobile/presentation/widgets/main_app_shell.dart';
 import 'package:ofgconnects_mobile/presentation/pages/history_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/liked_videos_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/watch_later_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/upload_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/bible_page.dart'; // <-- BIBLE IMPORT
 // ---
 
 final router = GoRouter(
-  initialLocation: '/', 
+  initialLocation: '/',
   routes: [
     GoRoute(
       path: '/',
@@ -26,12 +28,14 @@ final router = GoRouter(
       path: '/login',
       builder: (context, state) => const LoginPage(),
     ),
-    
+
+    // This ShellRoute wraps all pages that have the bottom nav bar
     ShellRoute(
       builder: (context, state, child) {
         return MainAppShell(child: child);
       },
       routes: [
+        // --- Tab 1: Home ---
         GoRoute(
           path: '/home',
           builder: (context, state) => const HomePage(),
@@ -45,27 +49,31 @@ final router = GoRouter(
             ),
           ],
         ),
+        // --- Tab 2: Shorts ---
         GoRoute(
-          path: '/shorts', // Stays the same path
+          path: '/shorts',
           builder: (context, state) {
-            // --- THIS IS THE FIX ---
-            // Get the 'id' from the query parameter (e.g., /shorts?id=123)
             final videoId = state.uri.queryParameters['id'];
-            // Pass it to the ShortsPage
             return ShortsPage(videoId: videoId);
-            // --- END FIX ---
           },
         ),
+        // --- Tab 3: Upload ---
+        GoRoute(
+          path: '/upload',
+          builder: (context, state) => const UploadPage(),
+        ),
+        // --- Tab 4: Following ---
         GoRoute(
           path: '/following',
           builder: (context, state) => const FollowingPage(),
         ),
+        // --- Tab 5: My Space ---
         GoRoute(
           path: '/myspace',
           builder: (context, state) => const MySpacePage(),
         ),
 
-        // --- User Library Routes (from previous step) ---
+        // --- Routes accessible from My Space or Drawer ---
         GoRoute(
           path: '/history',
           builder: (context, state) => const HistoryPage(),
@@ -77,6 +85,10 @@ final router = GoRouter(
         GoRoute(
           path: '/watchlater',
           builder: (context, state) => const WatchLaterPage(),
+        ),
+        GoRoute(
+          path: '/bible', // <-- BIBLE ROUTE
+          builder: (context, state) => const BiblePage(),
         ),
       ],
     ),

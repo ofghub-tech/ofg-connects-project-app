@@ -1,8 +1,6 @@
 // lib/presentation/widgets/shorts_player.dart
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/storage_provider.dart';
 import 'package:ofgconnects_mobile/logic/shorts_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:video_player/video_player.dart';
@@ -28,49 +26,42 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   @override
   void initState() {
     super.initState();
-    // Start initializing the player
     _initializePlayer();
   }
 
   Future<void> _initializePlayer() async {
     try {
-      // --- THIS IS THE FIX (STREAMING LOGIC) ---
-      
-      // 1. Check if the Video File ID is empty
-      if (widget.video.videoId.isEmpty) {
-        throw Exception('Video file ID is empty');
+      // DIRECT FIX: Use the videoUrl directly from the model.
+      // We assume the DB contains a valid full URL.
+      if (widget.video.videoUrl.isEmpty) {
+        throw Exception('Video URL is empty for video: ${widget.video.title}');
       }
 
-      // 2. Get the streamable URL using the File ID
-      // We use ref.read here because we are in initState
-      final streamUrl = await ref.read(videoStreamUrlProvider(widget.video.videoId).future);
-
-      // 3. Initialize the player with the network URL
       final controller = VideoPlayerController.networkUrl(
-        Uri.parse(streamUrl)
+        Uri.parse(widget.video.videoUrl),
       );
-      // --- END FIX ---
-      
+
       setState(() {
         _controller = controller;
-        // Start loading the video, set it to loop
         _initializeVideoPlayerFuture = controller.initialize().then((_) {
           _controller?.setLooping(true);
 
-          // Only auto-play if this is the active video when it's built.
+          // Only auto-play if this is the currently active page
           final activeIndex = ref.read(activeShortsIndexProvider);
           if (widget.index == activeIndex) {
             _controller?.play();
           }
-          setState(() {});
+          // Rebuild to show the player
+          if (mounted) setState(() {});
         });
       });
-
     } catch (e) {
       print("Error initializing shorts player: $e");
-      setState(() {
-        _initializeVideoPlayerFuture = Future.error(e);
-      });
+      if (mounted) {
+        setState(() {
+          _initializeVideoPlayerFuture = Future.error(e);
+        });
+      }
     }
   }
 
@@ -82,23 +73,23 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to the active page index
-    ref.listen<int>(activeShortsIndexProvider, (previousIndex, nextIndex) {
-      if (nextIndex == widget.index) {
-        _controller?.play(); // Play if this is the active short
+    ref.listen<int>(activeShortsIndexProvider, (previous, next) {
+      if (next == widget.index) {
+        _controller?.play();
       } else {
-        _controller?.pause(); // Pause if not
+        _controller?.pause();
       }
     });
 
     return FutureBuilder(
       future: _initializeVideoPlayerFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done && snapshot.error == null) {
-          // --- Main Player UI ---
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.error == null &&
+            _controller != null &&
+            _controller!.value.isInitialized) {
           return GestureDetector(
             onTap: () {
-              // Simple tap to play/pause
               setState(() {
                 _controller!.value.isPlaying
                     ? _controller!.pause()
@@ -108,17 +99,13 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // The Video Player
                 AspectRatio(
                   aspectRatio: _controller!.value.aspectRatio,
                   child: VideoPlayer(_controller!),
                 ),
-                
-                // Show a loading spinner if buffering
                 if (_controller!.value.isBuffering)
                   const Center(child: CircularProgressIndicator()),
-
-                // --- Video Info Overlay ---
+                // Overlay Info
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -149,19 +136,18 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
               ],
             ),
           );
-        } else if (snapshot.error != null) {
-          // --- Error UI ---
+        } else if (snapshot.hasError) {
           return Container(
             color: Colors.black,
             child: Center(
               child: Text(
                 'Error: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
               ),
             ),
           );
         } else {
-          // --- Loading UI ---
           return Container(
             color: Colors.black,
             child: const Center(child: CircularProgressIndicator()),

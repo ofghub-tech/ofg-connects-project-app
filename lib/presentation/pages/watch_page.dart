@@ -1,19 +1,14 @@
-import 'package:appwrite/appwrite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-// --- ADD THIS IMPORT ---
+import 'package:ofgconnects_mobile/logic/comments_provider.dart'; // Import comments provider
 import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
-// ---
-import 'package:ofgconnects_mobile/logic/storage_provider.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
+import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:video_player/video_player.dart';
-
-import 'package:ofgconnects_mobile/logic/subscription_provider.dart'; 
+import 'package:appwrite/models.dart' as models; // To avoid conflict with Video model if needed
 
 class WatchPage extends ConsumerStatefulWidget {
   final String videoId; 
@@ -32,8 +27,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
-    _recordHistory(); 
+    _initializePage();
   }
 
   @override
@@ -45,30 +39,11 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         _isLoading = true; 
         _errorMessage = null;
       });
-      _initializePlayer(); 
-      _recordHistory();    
+      _initializePage(); 
     }
   }
 
-  Future<void> _recordHistory() async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return;
-
-    // --- GRAB THE VIDEO DETAILS TO LOG VIEW COUNT ---
-    final video = await ref.read(videoDetailsProvider(widget.videoId).future);
-    if (video == null) return;
-
-    try {
-      // --- Use the Interaction Provider to handle view logging ---
-      // It handles the logic for checking history and incrementing the count
-      await ref.read(interactionProvider).logVideoView(widget.videoId, video.viewCount);
-    
-    } catch (e) {
-      print('Error recording history: $e');
-    }
-  }
-
-  Future<void> _initializePlayer() async {
+  Future<void> _initializePage() async {
     try {
       final video = await ref.read(videoDetailsProvider(widget.videoId).future);
       
@@ -77,13 +52,18 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         return;
       }
       
-      // FIX: Use 'video.videoId' which holds the URL
-      final streamUrl = await ref.read(videoStreamUrlProvider(video.videoId).future);
+      if (video.videoUrl.isEmpty) {
+         if (mounted) setState(() => _errorMessage = "Video URL is invalid");
+         return;
+      }
 
-      _controller = VideoPlayerController.networkUrl(Uri.parse(streamUrl));
+      _controller = VideoPlayerController.networkUrl(Uri.parse(video.videoUrl));
       await _controller!.initialize();
       
       _controller!.play();
+      
+      // Log history in background
+      _recordHistory(video);
 
       if (mounted) {
         setState(() {
@@ -101,6 +81,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     }
   }
 
+  Future<void> _recordHistory(Video video) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    try {
+      await ref.read(interactionProvider).logVideoView(video.id, video.viewCount);
+    } catch (e) {
+      print('Error recording history: $e');
+    }
+  }
+
   void _disposePlayer() {
     _controller?.dispose();
     _controller = null;
@@ -110,6 +101,26 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   void dispose() {
     _disposePlayer();
     super.dispose();
+  }
+
+  void _showComments(BuildContext context, String videoId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Allows the sheet to be taller
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) {
+          return CommentsSheet(videoId: videoId, scrollController: scrollController);
+        },
+      ),
+    );
   }
 
   @override
@@ -125,7 +136,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // --- VIDEO PLAYER AREA ---
+            // --- VIDEO PLAYER ---
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
@@ -134,63 +145,54 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                     ? const Center(child: CircularProgressIndicator())
                     : _errorMessage != null
                         ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white)))
-                        : Stack(
-                            alignment: Alignment.bottomCenter,
-                            children: [
-                              VideoPlayer(_controller!),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _controller!.value.isPlaying
-                                        ? _controller!.pause()
-                                        : _controller!.play();
-                                  });
-                                },
-                                child: Center(
-                                  child: Icon(
-                                    _controller!.value.isPlaying
-                                        ? Icons.pause_circle_outline
-                                        : Icons.play_circle_outline,
-                                    size: 64,
-                                    color: Colors.white.withOpacity(0.7),
+                        : GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _controller!.value.isPlaying
+                                    ? _controller!.pause()
+                                    : _controller!.play();
+                              });
+                            },
+                            child: Stack(
+                              alignment: Alignment.bottomCenter,
+                              children: [
+                                VideoPlayer(_controller!),
+                                if (!_controller!.value.isPlaying)
+                                  const Center(
+                                    child: Icon(Icons.play_circle_outline, size: 64, color: Colors.white54),
                                   ),
-                                ),
-                              ),
-                              VideoProgressIndicator(_controller!, allowScrubbing: true),
-                            ],
+                                VideoProgressIndicator(_controller!, allowScrubbing: true),
+                              ],
+                            ),
                           ),
               ),
             ),
 
-            // --- VIDEO DETAILS & SUGGESTIONS ---
+            // --- DETAILS ---
             Expanded(
               child: videoAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, stack) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.white))),
                 data: (video) {
-                  if (video == null) return const Center(child: Text('Video not found', style: TextStyle(color: Colors.white)));
+                  if (video == null) return const SizedBox.shrink();
                   return ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
-                      // Title
                       Text(
                         video.title,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       const SizedBox(height: 8),
 
-                      // --- VIEW COUNT AND LIKE COUNT ---
                       Text(
-                        // Use the viewCount from the video model
                         '${video.viewCount} views • ${video.likeCount} likes',
                         style: const TextStyle(color: Colors.grey, fontSize: 14),
                       ),
                       const SizedBox(height: 16),
 
-                      // Creator Info
                       _buildCreatorInfo(context, video),
                       
-                      // --- ACTION BUTTONS (LIKE, SAVE) ---
+                      // Pass the videoId to the action buttons to open comments
                       _buildActionButtons(context, video),
                       
                       const SizedBox(height: 16),
@@ -198,7 +200,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                       const Text("Suggested Videos", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                       const SizedBox(height: 8),
                       
-                      // Suggested Videos List
                       Consumer(
                         builder: (context, ref, child) {
                           final suggestedAsync = ref.watch(suggestedVideosProvider(widget.videoId));
@@ -226,9 +227,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     );
   }
   
-  // --- WIDGET FOR CREATOR INFO & FOLLOW BUTTON ---
   Widget _buildCreatorInfo(BuildContext context, Video video) {
-    // ... (This widget remains unchanged)
     final isFollowingAsync = ref.watch(isFollowingProvider(video.creatorId));
 
     return Row(
@@ -272,26 +271,19 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     );
   }
 
-  // ---
-  // --- NEW WIDGET FOR ACTION BUTTONS ---
-  // ---
   Widget _buildActionButtons(BuildContext context, Video video) {
-    // Watch the new provider to see if the video is liked
     final isLikedAsync = ref.watch(isLikedProvider(video.id));
-    // Watch the existing provider to see if the video is saved
     final isSavedAsync = ref.watch(interactionProvider).isVideoSaved(video.id);
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          // --- LIKE BUTTON ---
           isLikedAsync.when(
             data: (isLiked) {
               return TextButton.icon(
                 style: TextButton.styleFrom(foregroundColor: Colors.white),
                 onPressed: () {
-                  // Call the new toggleLike function
                   ref.read(interactionProvider).toggleLike(video.id, video.likeCount);
                 },
                 icon: Icon(
@@ -305,9 +297,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             error: (e, s) => const Icon(Icons.error, color: Colors.red),
           ),
           
+          // --- NEW COMMENT BUTTON ---
+          TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            onPressed: () => _showComments(context, video.id),
+            icon: const Icon(Icons.comment_outlined, color: Colors.white),
+            label: const Text('Comment'),
+          ),
+          // --------------------------
+
           const SizedBox(width: 8),
 
-          // --- SAVE (WATCH LATER) BUTTON ---
           FutureBuilder<bool>(
             future: isSavedAsync,
             builder: (context, snapshot) {
@@ -318,9 +318,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
               return TextButton.icon(
                 style: TextButton.styleFrom(foregroundColor: Colors.white),
                 onPressed: () async {
-                  // Call the existing toggleWatchLater function
                   await ref.read(interactionProvider).toggleWatchLater(video.id);
-                  // Manually trigger a rebuild to update the icon
                   setState(() {}); 
                 },
                 icon: Icon(
@@ -331,43 +329,162 @@ class _WatchPageState extends ConsumerState<WatchPage> {
               );
             },
           ),
-          
-          // You can add more buttons here (e.g., Share, Download)
         ],
       ),
     );
   }
 }
 
-// Helper provider for fetching details of a SINGLE video
-final videoDetailsProvider = FutureProvider.family<Video?, String>((ref, videoId) async {
-  // ... (This provider remains unchanged)
-  final databases = ref.watch(databasesProvider);
-  try {
-    final doc = await databases.getDocument(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdVideos,
-      documentId: videoId,
-    );
-    return Video.fromAppwrite(doc);
-  } catch (e) {
-    return null;
-  }
-});
+// --- NEW WIDGET: Comments Bottom Sheet ---
+class CommentsSheet extends ConsumerStatefulWidget {
+  final String videoId;
+  final ScrollController scrollController;
 
-// Helper provider for fetching suggested videos (excludes current one)
-final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref, currentVideoId) async {
-  // ... (This provider remains unchanged)
-  final databases = ref.watch(databasesProvider);
-  final response = await databases.listDocuments(
-    databaseId: AppwriteClient.databaseId,
-    collectionId: AppwriteClient.collectionIdVideos,
-    queries: [
-      Query.limit(10),
-      Query.orderDesc('\$createdAt'),
-    ],
-  );
-  
-  final allVideos = response.documents.map((d) => Video.fromAppwrite(d)).toList();
-  return allVideos.where((v) => v.id != currentVideoId).toList();
-});
+  const CommentsSheet({
+    super.key,
+    required this.videoId,
+    required this.scrollController,
+  });
+
+  @override
+  ConsumerState<CommentsSheet> createState() => _CommentsSheetState();
+}
+
+class _CommentsSheetState extends ConsumerState<CommentsSheet> {
+  final TextEditingController _commentController = TextEditingController();
+  bool _isPosting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load comments when the sheet opens
+    Future.microtask(() => 
+      ref.read(commentsProvider.notifier).loadComments(widget.videoId)
+    );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _postComment() async {
+    if (_commentController.text.trim().isEmpty) return;
+
+    setState(() => _isPosting = true);
+    try {
+      await ref.read(commentsProvider.notifier).postComment(
+        videoId: widget.videoId,
+        content: _commentController.text.trim(),
+      );
+      _commentController.clear();
+      // Dismiss keyboard
+      FocusManager.instance.primaryFocus?.unfocus();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to post: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final commentsAsync = ref.watch(commentsProvider);
+
+    return Column(
+      children: [
+        // Handle bar
+        const SizedBox(height: 12),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey[600],
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text("Comments", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        
+        // Comments List
+        Expanded(
+          child: commentsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, s) => Center(child: Text('Error loading comments: $e', style: const TextStyle(color: Colors.white))),
+            data: (comments) {
+              if (comments.isEmpty) {
+                return const Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: Colors.grey)));
+              }
+              return ListView.separated(
+                controller: widget.scrollController,
+                itemCount: comments.length,
+                separatorBuilder: (c, i) => const Divider(color: Colors.grey, height: 1),
+                itemBuilder: (context, index) {
+                  final comment = comments[index];
+                  final data = comment.data;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blueGrey,
+                      child: Text(
+                        (data['username'] as String? ?? 'U')[0].toUpperCase(),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    title: Text(
+                      data['username'] ?? 'Unknown',
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      data['content'] ?? '',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+
+        // Input Field
+        Container(
+          padding: EdgeInsets.only(
+            left: 16, 
+            right: 16, 
+            top: 16, 
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.black,
+            border: Border(top: BorderSide(color: Colors.grey)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    hintText: 'Add a comment...',
+                    hintStyle: TextStyle(color: Colors.grey),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              _isPosting
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                  : IconButton(
+                      onPressed: _postComment,
+                      icon: const Icon(Icons.send, color: Colors.blue),
+                    ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

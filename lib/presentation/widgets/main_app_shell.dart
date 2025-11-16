@@ -1,35 +1,26 @@
 // lib/presentation/widgets/main_app_shell.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart'; // Import GoRouter
+import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
-// 1. Changed to ConsumerWidget
-class MainAppShell extends ConsumerWidget { 
-  // 2. GoRouter passes the current page as a 'child'
-  final Widget child; 
+class MainAppShell extends ConsumerWidget {
+  final Widget child;
 
   const MainAppShell({super.key, required this.child});
 
-  // 3. Helper to figure out which nav item is active
+  // Index calculation for 5 items
   int _calculateSelectedIndex(BuildContext context) {
     final String location = GoRouterState.of(context).uri.toString();
-    if (location.startsWith('/home')) {
-      return 0;
-    }
-    if (location.startsWith('/shorts')) {
-      return 1;
-    }
-    if (location.startsWith('/following')) {
-      return 2;
-    }
-    if (location.startsWith('/myspace')) {
-      return 3;
-    }
+    if (location.startsWith('/home')) return 0;
+    if (location.startsWith('/shorts')) return 1;
+    if (location.startsWith('/upload')) return 2;
+    if (location.startsWith('/following')) return 3;
+    if (location.startsWith('/myspace')) return 4;
     return 0; // Default to home
   }
 
-  // 4. Navigation tap handler
+  // Tap handler for 5 items
   void _onItemTapped(int index, BuildContext context) {
     switch (index) {
       case 0:
@@ -39,16 +30,19 @@ class MainAppShell extends ConsumerWidget {
         context.go('/shorts');
         break;
       case 2:
-        context.go('/following');
+        context.go('/upload');
         break;
       case 3:
+        context.go('/following');
+        break;
+      case 4:
         context.go('/myspace');
         break;
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) { // 5. Added ref
+  Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = _calculateSelectedIndex(context);
 
     return Scaffold(
@@ -57,19 +51,17 @@ class MainAppShell extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () { /* TODO: context.go('/search'); */ },
+            onPressed: () { /* TODO: context.go('/search'); */
+            },
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none),
-            onPressed: () { /* TODO: Show notifications */ },
+            onPressed: () { /* TODO: Show notifications */
+            },
           ),
         ],
       ),
-
-      // 6. The Main Content Area - displays the current page
-      body: child, 
-
-      // 7. The Drawer (Sidebar)
+      body: child,
       drawer: Drawer(
         child: Consumer(
           builder: (context, ref, child) {
@@ -81,38 +73,49 @@ class MainAppShell extends ConsumerWidget {
                   accountName: Text(user?.name ?? 'Guest'),
                   accountEmail: Text(user?.email ?? 'No email'),
                   currentAccountPicture: CircleAvatar(
-                    // 8. Safer way to get first initial
                     child: Text(user?.name.isNotEmpty == true ? user!.name[0] : 'G'),
                   ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.history),
                   title: const Text('History'),
-                  onTap: () { /* TODO: context.go('/history'); */ },
+                  onTap: () {
+                    context.pop(); // Close drawer
+                    context.push('/history'); // Navigate
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.watch_later_outlined),
                   title: const Text('Watch Later'),
-                  onTap: () { /* TODO: context.go('/watchlater'); */ },
+                  onTap: () {
+                    context.pop(); // Close drawer
+                    context.push('/watchlater'); // Navigate
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.thumb_up_alt_outlined),
                   title: const Text('Liked Videos'),
-                  onTap: () { /* TODO: context.go('/liked'); */ },
+                  onTap: () {
+                    context.pop();
+                    context.push('/liked');
+                  },
                 ),
+                
+                // --- BIBLE LINK REMOVED FROM HERE ---
+
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.settings_outlined),
                   title: const Text('Settings'),
-                  onTap: () { /* TODO: context.go('/settings'); */ },
+                  onTap: () { /* TODO: context.go('/settings'); */
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.logout),
                   title: const Text('Logout'),
                   onTap: () {
                     ref.read(authProvider.notifier).logoutUser();
-                    // 9. Navigate to login after logout
-                    context.go('/login'); 
+                    context.go('/login');
                   },
                 ),
               ],
@@ -120,8 +123,19 @@ class MainAppShell extends ConsumerWidget {
           },
         ),
       ),
+      
+      // --- HERE IS THE FLOATING ACTION BUTTON ---
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Use push to open the Bible page over the current page
+          context.push('/bible');
+        },
+        backgroundColor: Colors.blue, // Optional: Style it
+        foregroundColor: Colors.white, // Optional: Style it
+        child: const Icon(Icons.book_outlined), // 
+      ),
+      // ------------------------------------------
 
-      // 10. The Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -135,6 +149,11 @@ class MainAppShell extends ConsumerWidget {
             label: 'Shorts',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.add_circle_outline, size: 30),
+            activeIcon: Icon(Icons.add_circle, size: 30),
+            label: 'Upload',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.people_alt_outlined),
             activeIcon: Icon(Icons.people_alt),
             label: 'Following',
@@ -146,10 +165,11 @@ class MainAppShell extends ConsumerWidget {
           ),
         ],
         currentIndex: selectedIndex,
-        onTap: (index) => _onItemTapped(index, context), // 11. Pass context
+        onTap: (index) => _onItemTapped(index, context),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
       ),
     );
   }

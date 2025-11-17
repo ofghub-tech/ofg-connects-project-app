@@ -68,7 +68,7 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
     // 5. Build the PageView
     return PageView.builder(
       controller: _pageController,
-      scrollDirection: Axis.horizontal, // Keep horizontal as per your file
+      scrollDirection: Axis.vertical, // <-- THIS WAS THE FIX
       itemCount: shorts.length + (shortsState.hasMore ? 1 : 0), // Add 1 for loader
       onPageChanged: (index) {
         // This provider controls which video is playing

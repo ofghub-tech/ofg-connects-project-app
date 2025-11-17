@@ -9,6 +9,27 @@ final commentsProvider = StateNotifierProvider<CommentsNotifier, AsyncValue<List
   return CommentsNotifier(ref);
 });
 
+// --- NEW PROVIDER ---
+// Fetches replies for a specific parent comment ID
+final repliesProvider = FutureProvider.family<List<Document>, String>((ref, parentId) async {
+  try {
+    final response = await AppwriteClient.databases.listDocuments(
+      databaseId: AppwriteClient.databaseId,
+      collectionId: AppwriteClient.collectionIdComments,
+      queries: [
+        Query.equal('parent_id', parentId),
+        Query.orderAsc('\$createdAt'), // Show oldest replies first
+      ],
+    );
+    return response.documents;
+  } catch (e) {
+    print('Error fetching replies: $e');
+    return [];
+  }
+});
+// --- END NEW PROVIDER ---
+
+
 class CommentsNotifier extends StateNotifier<AsyncValue<List<Document>>> {
   CommentsNotifier(this.ref) : super(const AsyncValue.loading());
   
@@ -22,6 +43,7 @@ class CommentsNotifier extends StateNotifier<AsyncValue<List<Document>>> {
         collectionId: AppwriteClient.collectionIdComments,
         queries: [
           Query.equal('videoId', videoId),
+          Query.equal('parent_id', null), // <-- THIS IS THE FIX (fetches top-level only)
           Query.orderDesc('\$createdAt'),
         ],
       );
@@ -58,10 +80,17 @@ class CommentsNotifier extends StateNotifier<AsyncValue<List<Document>>> {
         ]
       );
       
-      // Optimistic Update: Add new comment to the top of the list
-      state.whenData((comments) {
-        state = AsyncValue.data([newComment, ...comments]);
-      });
+      // --- UPDATE LOGIC ---
+      if (parentId == null) {
+        // This is a new TOP-LEVEL comment, add it to the top of the main list
+        state.whenData((comments) {
+          state = AsyncValue.data([newComment, ...comments]);
+        });
+      } else {
+        // This is a REPLY, invalidate the repliesProvider so it refetches
+        ref.invalidate(repliesProvider(parentId));
+      }
+      // --- END UPDATE LOGIC ---
       
     } catch (e) {
       rethrow;

@@ -1,4 +1,5 @@
 // lib/presentation/pages/search_page.dart
+import 'dart:async'; // <-- ADDED THIS IMPORT
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/logic/search_provider.dart';
@@ -13,6 +14,7 @@ class SearchPage extends ConsumerStatefulWidget {
 
 class _SearchPageState extends ConsumerState<SearchPage> {
   final _searchController = TextEditingController();
+  Timer? _debounce; // <-- ADDED THIS
 
   @override
   void initState() {
@@ -25,12 +27,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _debounce?.cancel(); // <-- ADDED THIS
     super.dispose();
   }
 
-  void _performSearch() {
-    ref.read(searchQueryProvider.notifier).state = _searchController.text;
-  }
+  // This function is no longer needed
+  // void _performSearch() {
+  //   ref.read(searchQueryProvider.notifier).state = _searchController.text;
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -50,12 +54,28 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
           ),
           style: const TextStyle(color: Colors.white),
-          onSubmitted: (_) => _performSearch(),
+          // --- UPDATED THIS SECTION ---
+          onChanged: (query) {
+            _debounce?.cancel();
+            _debounce = Timer(const Duration(milliseconds: 500), () {
+              ref.read(searchQueryProvider.notifier).state = query;
+            });
+          },
+          onSubmitted: (_) {
+            _debounce?.cancel();
+            ref.read(searchQueryProvider.notifier).state = _searchController.text;
+          },
+          // ---------------------------
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: _performSearch,
+            // --- UPDATED THIS ---
+            onPressed: () {
+              _debounce?.cancel();
+              ref.read(searchQueryProvider.notifier).state = _searchController.text;
+            },
+            // --------------------
           )
         ],
       ),

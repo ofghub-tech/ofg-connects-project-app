@@ -4,41 +4,83 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
 
-// 1. Convert to ConsumerWidget
-class FollowingPage extends ConsumerWidget {
+// 1. Convert to ConsumerStatefulWidget
+class FollowingPage extends ConsumerStatefulWidget {
   const FollowingPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 2. Watch the 'followingVideosProvider'
-    final videoListAsync = ref.watch(followingVideosProvider);
+  ConsumerState<FollowingPage> createState() => _FollowingPageState();
+}
 
-    // 3. Build the UI, handling loading, error, and data states
-    return videoListAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(child: Text('Error: $error')),
-      data: (videos) {
-        if (videos.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'You are not following anyone, or the users you follow haven\'t posted videos yet.',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          );
-        }
+// 2. Make sure state extends ConsumerState
+class _FollowingPageState extends ConsumerState<FollowingPage> {
+  final _scrollController = ScrollController();
 
-        // 4. Display the list of videos using VideoCard
-        return ListView.builder(
-          itemCount: videos.length,
-          itemBuilder: (context, index) {
-            final video = videos[index];
-            return VideoCard(video: video);
-          },
-        );
-      },
+  @override
+  void initState() {
+    super.initState();
+
+    // 3. Add listener for pagination
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        // 4. Fetch more following videos
+        ref.read(paginatedFollowingProvider.notifier).fetchMore();
+      }
+    });
+
+    // 5. Fetch initial batch
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(paginatedFollowingProvider.notifier).fetchFirstBatch();
+    });
+  }
+
+   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // 6. Make sure build method signature is correct
+  @override
+  Widget build(BuildContext context) {
+    // 7. Watch the new paginated provider
+    final followingState = ref.watch(paginatedFollowingProvider);
+    final videos = followingState.items;
+
+    // Handle initial loading
+    final isInitialLoading = videos.isEmpty && followingState.isLoadingMore;
+
+    // 8. Return the Scaffold (not inside a Consumer)
+    return Scaffold(
+      body: isInitialLoading
+          ? const Center(child: CircularProgressIndicator())
+          : videos.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'You are not following anyone, or the users you follow haven\'t posted videos yet.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  controller: _scrollController,
+                  itemCount: videos.length + (followingState.hasMore ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    // 9. Show loading indicator at the end
+                    if (index == videos.length) {
+                      return followingState.isLoadingMore
+                          ? const Center(child: CircularProgressIndicator())
+                          : const SizedBox();
+                    }
+                    
+                    // 10. Use the standard VideoCard
+                    final video = videos[index];
+                    return VideoCard(video: video);
+                  },
+                ),
     );
   }
 }

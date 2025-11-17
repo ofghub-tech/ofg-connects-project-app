@@ -1,3 +1,4 @@
+// lib/presentation/pages/watch_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
@@ -297,14 +298,12 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             error: (e, s) => const Icon(Icons.error, color: Colors.red),
           ),
           
-          // --- NEW COMMENT BUTTON ---
           TextButton.icon(
             style: TextButton.styleFrom(foregroundColor: Colors.white),
             onPressed: () => _showComments(context, video.id),
             icon: const Icon(Icons.comment_outlined, color: Colors.white),
             label: const Text('Comment'),
           ),
-          // --------------------------
 
           const SizedBox(width: 8),
 
@@ -335,7 +334,9 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
 }
 
-// --- NEW WIDGET: Comments Bottom Sheet ---
+// We'll store the comment we're replying to in a simple StateProvider
+final replyingToCommentProvider = StateProvider<models.Document?>((ref) => null);
+
 class CommentsSheet extends ConsumerStatefulWidget {
   final String videoId;
   final ScrollController scrollController;
@@ -357,10 +358,11 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   @override
   void initState() {
     super.initState();
-    // Load comments when the sheet opens
-    Future.microtask(() => 
-      ref.read(commentsProvider.notifier).loadComments(widget.videoId)
-    );
+    // Clear the reply state when the sheet opens
+    Future.microtask(() {
+      ref.read(replyingToCommentProvider.notifier).state = null;
+      ref.read(commentsProvider.notifier).loadComments(widget.videoId);
+    });
   }
 
   @override
@@ -371,14 +373,20 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
   Future<void> _postComment() async {
     if (_commentController.text.trim().isEmpty) return;
+    
+    // Get the comment we are replying to (if any)
+    final replyingTo = ref.read(replyingToCommentProvider);
 
     setState(() => _isPosting = true);
     try {
       await ref.read(commentsProvider.notifier).postComment(
         videoId: widget.videoId,
         content: _commentController.text.trim(),
+        parentId: replyingTo?.$id, // Pass the parentId
       );
       _commentController.clear();
+      // Clear the reply state
+      ref.read(replyingToCommentProvider.notifier).state = null;
       // Dismiss keyboard
       FocusManager.instance.primaryFocus?.unfocus();
     } catch (e) {
@@ -392,7 +400,11 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // --- THIS WAS THE FIX ---
     final commentsAsync = ref.watch(commentsProvider);
+    // ------------------------
+    // Watch the reply state to show UI feedback
+    final replyingTo = ref.watch(replyingToCommentProvider);
 
     return Column(
       children: [
@@ -420,30 +432,13 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
               if (comments.isEmpty) {
                 return const Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: Colors.grey)));
               }
-              return ListView.separated(
+              return ListView.builder(
                 controller: widget.scrollController,
                 itemCount: comments.length,
-                separatorBuilder: (c, i) => const Divider(color: Colors.grey, height: 1),
                 itemBuilder: (context, index) {
                   final comment = comments[index];
-                  final data = comment.data;
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blueGrey,
-                      child: Text(
-                        (data['username'] as String? ?? 'U')[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    title: Text(
-                      data['username'] ?? 'Unknown',
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      data['content'] ?? '',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                  );
+                  // Use our new CommentTile widget
+                  return CommentTile(comment: comment);
                 },
               );
             },
@@ -455,36 +450,181 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
           padding: EdgeInsets.only(
             left: 16, 
             right: 16, 
-            top: 16, 
+            top: 8, // Reduced padding
             bottom: MediaQuery.of(context).viewInsets.bottom + 16
           ),
           decoration: const BoxDecoration(
             color: Colors.black,
             border: Border(top: BorderSide(color: Colors.grey)),
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _commentController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    hintText: 'Add a comment...',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              _isPosting
-                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                  : IconButton(
-                      onPressed: _postComment,
-                      icon: const Icon(Icons.send, color: Colors.blue),
+              // Show "Replying to..." if we are replying
+              if (replyingTo != null)
+                Row(
+                  children: [
+                    Text(
+                      'Replying to ${replyingTo.data['username'] ?? 'Unknown'}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
+                    const Spacer(),
+                    IconButton(
+                      iconSize: 16,
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () {
+                        ref.read(replyingToCommentProvider.notifier).state = null;
+                      },
+                    )
+                  ],
+                ),
+              // Main input row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: replyingTo != null ? 'Add a reply...' : 'Add a comment...',
+                        hintStyle: const TextStyle(color: Colors.grey),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  _isPosting
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: _postComment,
+                          icon: const Icon(Icons.send, color: Colors.blue),
+                        ),
+                ],
+              ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+
+class CommentTile extends ConsumerStatefulWidget {
+  final models.Document comment;
+  const CommentTile({super.key, required this.comment});
+
+  @override
+  ConsumerState<CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends ConsumerState<CommentTile> {
+  bool _showReplies = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.comment.data;
+    final username = data['username'] ?? 'Unknown';
+    final content = data['content'] ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. The main comment body
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.blueGrey,
+                child: Text(
+                  username[0].toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      username,
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      content,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 8),
+                    // Reply button
+                    GestureDetector(
+                      onTap: () {
+                        // Set this comment as the one to reply to
+                        ref.read(replyingToCommentProvider.notifier).state = widget.comment;
+                      },
+                      child: const Text(
+                        'REPLY',
+                        style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // 2. "View Replies" button and the replies list
+          Padding(
+            padding: const EdgeInsets.only(left: 44.0), // Indent replies
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // "View Replies" button (watches the provider)
+                Consumer(
+                  builder: (context, ref, child) {
+                    final repliesAsync = ref.watch(repliesProvider(widget.comment.$id));
+                    return repliesAsync.when(
+                      data: (replies) {
+                        if (replies.isEmpty) return const SizedBox.shrink(); // No replies, show nothing
+                        
+                        return TextButton(
+                          onPressed: () => setState(() => _showReplies = !_showReplies),
+                          child: Text(
+                            _showReplies ? 'Hide Replies' : 'View ${replies.length} Replies',
+                            style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                          ),
+                        );
+                      },
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: SizedBox(height: 10, width: 10, child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                      error: (e, s) => const Text('Error loading replies', style: TextStyle(color: Colors.red)),
+                    );
+                  },
+                ),
+
+                // The Replies List (conditionally shown)
+                if (_showReplies)
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final repliesAsync = ref.watch(repliesProvider(widget.comment.$id));
+                      return repliesAsync.when(
+                        data: (replies) => Column(
+                          children: replies.map((reply) => CommentTile(comment: reply)).toList(),
+                        ),
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (e, s) => const Text('Error loading replies', style: TextStyle(color: Colors.red)),
+                      );
+                    },
+                  )
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -8,7 +8,7 @@ import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 enum AuthStatus {
   loading,
   authenticated,
-  unauthenticated
+  unauthenticated // This state now represents a critical error
 }
 
 class AuthState {
@@ -36,76 +36,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final currentUser = await _account.get();
       state = state.copyWith(status: AuthStatus.authenticated, user: currentUser);
-    } catch (e, st) {
-      // useful debug info
-      print('Error in checkUserStatus: $e\n$st');
+    } catch (e) {
+      // Failed to get user, log in as guest
+      await loginAsGuest();
+    }
+  }
+
+  Future<void> loginAsGuest() async {
+    try {
+      await _account.createAnonymousSession();
+      final guestUser = await _account.get();
+      state = state.copyWith(status: AuthStatus.authenticated, user: guestUser);
+    } catch (e) {
+      // If guest login also fails, this is a critical error
+      print('CRITICAL: Failed to create anonymous session: $e');
       state = state.copyWith(status: AuthStatus.unauthenticated, user: null);
-    }
-  }
-
-  Future<void> loginUser({required String email, required String password}) async {
-    try {
-      // mark loading so UI doesn't navigate away mid-flow
-      state = state.copyWith(status: AuthStatus.loading);
-
-      // Remove any existing session (best-effort)
-      try {
-        await _account.deleteSession(sessionId: 'current');
-      } catch (_) {
-        // ignore
-      }
-
-      // Use the Appwrite method available in your SDK:
-      // createEmailPasswordSession is expected in recent Appwrite Dart SDKs.
-      await _account.createEmailPasswordSession(email: email, password: password);
-
-      // Refresh state after successful login
-      await checkUserStatus();
-    } catch (e, st) {
-      print('loginUser error: $e\n$st');
-      rethrow;
-    }
-  }
-
-  Future<void> registerUser({
-    required String email,
-    required String password,
-    required String name,
-  }) async {
-    try {
-      await _account.create(
-        userId: ID.unique(),
-        email: email,
-        password: password,
-        name: name,
-      );
-
-      // Log in immediately after registering
-      await loginUser(email: email, password: password);
-    } catch (e, st) {
-      print('registerUser error: $e\n$st');
-      rethrow;
     }
   }
 
   Future<void> googleLogin() async {
     try {
-      // mark loading so the app won't navigate to /login while the browser flow runs
+      // mark loading
       state = state.copyWith(status: AuthStatus.loading);
 
       try {
         await _account.deleteSession(sessionId: 'current');
       } catch (_) {
-        // ignore
+        // ignore if no session exists
       }
 
       // Start OAuth flow (opens browser)
       await _account.createOAuth2Session(provider: OAuthProvider.google);
 
-      // We DO NOT call checkUserStatus() here because user is redirected out to browser.
-      // The app should call checkUserStatus() on resume (your main.dart lifecycle handler).
+      // checkUserStatus() will be called by main.dart's app lifecycle handler
     } catch (e, st) {
       print('googleLogin error: $e\n$st');
+      // If Google login fails, revert to guest
+      await loginAsGuest();
       rethrow;
     }
   }
@@ -113,21 +80,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logoutUser() async {
     try {
       await _account.deleteSession(sessionId: 'current');
-      state = state.copyWith(status: AuthStatus.unauthenticated, user: null);
+      // After logging out, immediately log back in as guest
+      await loginAsGuest();
     } catch (e, st) {
       print('logoutUser error: $e\n$st');
+      // Try to log in as guest even if logout fails
+      await loginAsGuest();
     }
   }
 
-  Future<void> updateUserName(String newName) async {
+  // --- UPDATED: Combined function for profile updates ---
+  Future<void> updateUserProfile({required String name, required String bio}) async {
     try {
-      await _account.updateName(name: newName);
+      // Get current prefs, update bio, then send all prefs
+      final currentPrefs = state.user?.prefs.data ?? {};
+      currentPrefs['bio'] = bio;
+
+      // Update name and prefs
+      await _account.updateName(name: name);
+      await _account.updatePrefs(prefs: currentPrefs);
+      
+      // Refresh user state once
       await checkUserStatus();
     } catch (e, st) {
-      print('updateUserName error: $e\n$st');
+      print('updateUserProfile error: $e\n$st');
       rethrow;
     }
   }
+  // --- REMOVED: updateUserName (now part of updateUserProfile) ---
 
   Future<void> updateUserPassword(String newPassword, String oldPassword) async {
     try {

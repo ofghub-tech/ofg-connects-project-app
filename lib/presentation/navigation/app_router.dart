@@ -2,19 +2,20 @@
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/presentation/pages/following_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/home_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/login_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/my_space_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/shorts_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/watch_page.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/auth_gate.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/main_app_shell.dart';
 
-// --- ADDED NEW PAGE IMPORTS ---
+// --- Page Imports ---
 import 'package:ofgconnects_mobile/presentation/pages/history_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/liked_videos_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/watch_later_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/upload_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/bible_page.dart'; // <-- BIBLE IMPORT
+import 'package:ofgconnects_mobile/presentation/pages/bible_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/settings_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/search_page.dart'; // <-- MAKE SURE THIS IS ADDED
 // ---
 
 final router = GoRouter(
@@ -23,10 +24,6 @@ final router = GoRouter(
     GoRoute(
       path: '/',
       builder: (context, state) => const AuthGate(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginPage(),
     ),
 
     // This ShellRoute wraps all pages that have the bottom nav bar
@@ -73,7 +70,7 @@ final router = GoRouter(
           builder: (context, state) => const MySpacePage(),
         ),
 
-        // --- Routes accessible from My Space or Drawer ---
+        // --- Other Routes inside the shell ---
         GoRoute(
           path: '/history',
           builder: (context, state) => const HistoryPage(),
@@ -87,8 +84,17 @@ final router = GoRouter(
           builder: (context, state) => const WatchLaterPage(),
         ),
         GoRoute(
-          path: '/bible', // <-- BIBLE ROUTE
+          path: '/bible',
           builder: (context, state) => const BiblePage(),
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsPage(),
+        ),
+        // --- ADD THIS ROUTE ---
+        GoRoute(
+          path: '/search',
+          builder: (context, state) => const SearchPage(),
         ),
       ],
     ),

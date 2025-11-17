@@ -12,32 +12,24 @@ class AuthGate extends ConsumerStatefulWidget {
 }
 
 class _AuthGateState extends ConsumerState<AuthGate> {
-  // guard so we only register the listener once (and inside build)
   bool _listenerRegistered = false;
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // Register listener inside build (Riverpod requires this).
-    // We ensure it runs only once to avoid duplicate registrations.
     if (!_listenerRegistered) {
       _listenerRegistered = true;
 
       ref.listen<AuthState>(authProvider, (previous, next) {
-        // don't navigate when a loading check is in progress
-        if (next.status == AuthStatus.loading) return;
-
+        // Only navigate when authenticated
         if (next.status == AuthStatus.authenticated) {
           if (mounted) context.go('/home');
-        } else if (next.status == AuthStatus.unauthenticated) {
-          if (mounted) context.go('/login');
         }
       });
     }
 
     // Show relevant UI while auth state resolves.
-    // Navigation is handled by the listener above.
     return Scaffold(
       body: Center(
         child: Column(
@@ -46,13 +38,18 @@ class _AuthGateState extends ConsumerState<AuthGate> {
             if (authState.status == AuthStatus.loading) ...[
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
-              const Text('Checking authentication...'),
+              const Text('Connecting...'),
             ] else if (authState.status == AuthStatus.authenticated) ...[
               // Empty view — listener will navigate to /home
               const SizedBox.shrink(),
             ] else ...[
-              // Empty view — listener will navigate to /login
-              const SizedBox.shrink(),
+              // This is the error state if guest login fails
+              const Icon(Icons.error, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Failed to connect. Please restart the app.',
+                textAlign: TextAlign.center,
+              ),
             ],
           ],
         ),

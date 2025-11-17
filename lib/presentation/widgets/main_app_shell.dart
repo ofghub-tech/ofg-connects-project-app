@@ -41,101 +41,95 @@ class MainAppShell extends ConsumerWidget {
     }
   }
 
+  // --- Handle profile menu selection ---
+  void _onProfileMenuSelected(String value, WidgetRef ref, BuildContext context) {
+    switch (value) {
+      case 'settings':
+        context.push('/settings');
+        break;
+      case 'logout':
+        ref.read(authProvider.notifier).logoutUser();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedIndex = _calculateSelectedIndex(context);
+    
+    final user = ref.watch(authProvider).user;
+    final bool isGuest = user == null || user.email.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false, 
         title: const Text('OFG Connects'),
         actions: [
+          if (isGuest)
+            TextButton(
+              onPressed: () {
+                ref.read(authProvider.notifier).googleLogin();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).appBarTheme.actionsIconTheme?.color ?? Colors.white,
+              ),
+              child: const Text('Sign Up'),
+            ),
+          
+          // --- UPDATE THIS BUTTON ---
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () { /* TODO: context.go('/search'); */
+            onPressed: () {
+              context.push('/search'); // Navigate to search page
             },
           ),
+          // ---------------------------
+
           IconButton(
             icon: const Icon(Icons.notifications_none),
             onPressed: () { /* TODO: Show notifications */
             },
           ),
+          PopupMenuButton<String>(
+            onSelected: (value) => _onProfileMenuSelected(value, ref, context),
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: ListTile(
+                  leading: Icon(Icons.settings),
+                  title: Text('Settings'),
+                ),
+              ),
+              if (!isGuest)
+                const PopupMenuItem<String>(
+                  value: 'logout',
+                  child: ListTile(
+                    leading: Icon(Icons.logout),
+                    title: Text('Logout'),
+                  ),
+                ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: CircleAvatar(
+                radius: 16,
+                child: Text(isGuest ? 'G' : user!.name[0].toUpperCase()),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: child,
-      drawer: Drawer(
-        child: Consumer(
-          builder: (context, ref, child) {
-            final user = ref.watch(authProvider).user;
-            return ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                UserAccountsDrawerHeader(
-                  accountName: Text(user?.name ?? 'Guest'),
-                  accountEmail: Text(user?.email ?? 'No email'),
-                  currentAccountPicture: CircleAvatar(
-                    child: Text(user?.name.isNotEmpty == true ? user!.name[0] : 'G'),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.history),
-                  title: const Text('History'),
-                  onTap: () {
-                    context.pop(); // Close drawer
-                    context.push('/history'); // Navigate
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.watch_later_outlined),
-                  title: const Text('Watch Later'),
-                  onTap: () {
-                    context.pop(); // Close drawer
-                    context.push('/watchlater'); // Navigate
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.thumb_up_alt_outlined),
-                  title: const Text('Liked Videos'),
-                  onTap: () {
-                    context.pop();
-                    context.push('/liked');
-                  },
-                ),
-                
-                // --- BIBLE LINK REMOVED FROM HERE ---
-
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.settings_outlined),
-                  title: const Text('Settings'),
-                  onTap: () { /* TODO: context.go('/settings'); */
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: const Text('Logout'),
-                  onTap: () {
-                    ref.read(authProvider.notifier).logoutUser();
-                    context.go('/login');
-                  },
-                ),
-              ],
-            );
-          },
-        ),
-      ),
       
-      // --- HERE IS THE FLOATING ACTION BUTTON ---
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Use push to open the Bible page over the current page
           context.push('/bible');
         },
-        backgroundColor: Colors.blue, // Optional: Style it
-        foregroundColor: Colors.white, // Optional: Style it
-        child: const Icon(Icons.book_outlined), // 
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.book_outlined),
       ),
-      // ------------------------------------------
-
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(

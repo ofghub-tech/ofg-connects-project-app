@@ -3,18 +3,69 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart'; // Import the new widget
+import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart';
 
-class HomePage extends ConsumerWidget {
+// --- 1. Converted to ConsumerStatefulWidget ---
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Watch our two new providers
-    final shortsAsync = ref.watch(shortsListProvider);
-    final videosAsync = ref.watch(videosListProvider);
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  // --- 2. Create Scroll Controllers ---
+  final _scrollController = ScrollController();
+  final _shortsScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    // --- 3. Add listener for vertical video list ---
+    _scrollController.addListener(() {
+      // If we're at the bottom, fetch more
+      if (_scrollController.position.pixels >= 
+          _scrollController.position.maxScrollExtent - 200) { // 200px buffer
+        ref.read(videosListProvider.notifier).fetchMore();
+      }
+    });
+
+    // --- 4. Add listener for horizontal shorts list ---
+    _shortsScrollController.addListener(() {
+      if (_shortsScrollController.position.pixels >=
+          _shortsScrollController.position.maxScrollExtent - 100) { // 100px buffer
+        ref.read(shortsListProvider.notifier).fetchMore();
+      }
+    });
+
+    // --- 5. Fetch initial data (if not already loaded) ---
+    // We run this in a post-frame callback to ensure ref is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(shortsListProvider.notifier).fetchFirstBatch();
+      ref.read(videosListProvider.notifier).fetchFirstBatch();
+    });
+  }
+
+  @override
+  void dispose() {
+    // --- 6. Dispose controllers ---
+    _scrollController.dispose();
+    _shortsScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // --- 7. Watch the new paginated providers ---
+    final shortsState = ref.watch(shortsListProvider);
+    final videosState = ref.watch(videosListProvider);
+
+    // Handle initial loading state
+    final isInitialLoading = videosState.items.isEmpty && videosState.isLoadingMore;
 
     return ListView(
+      controller: _scrollController, // Assign main controller
       children: [
         // --- SHORTS SECTION ---
         Padding(
@@ -24,32 +75,28 @@ class HomePage extends ConsumerWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
-        shortsAsync.when(
-          loading: () => const SizedBox(
-            height: 250, // Fixed height for the horizontal list
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (error, stack) => Center(child: Text('Error: $error')),
-          data: (shorts) {
-            if (shorts.isEmpty) {
-              return const SizedBox(height: 100, child: Center(child: Text('No shorts found.')));
-            }
-            return SizedBox(
-              height: 250, // Constrain the height of the horizontal list
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal, // Scroll left-to-right
-                itemCount: shorts.length,
-                itemBuilder: (context, index) {
-                  final short = shorts[index];
-                  // Use our new ShortsCard widget
-                  return SizedBox(
-                    width: 150, // Fixed width for the 9:16 card
-                    child: ShortsCard(video: short),
-                  );
-                },
-              ),
-            );
-          },
+        SizedBox(
+          height: 250, // Constrain the height of the horizontal list
+          child: (shortsState.items.isEmpty && shortsState.isLoadingMore)
+              ? const Center(child: CircularProgressIndicator()) // Initial load
+              : ListView.builder(
+                  controller: _shortsScrollController, // Assign shorts controller
+                  scrollDirection: Axis.horizontal,
+                  itemCount: shortsState.items.length + (shortsState.hasMore ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    // --- 8. Show loading indicator at the end ---
+                    if (index == shortsState.items.length) {
+                      return shortsState.isLoadingMore
+                          ? const Center(child: CircularProgressIndicator())
+                          : const SizedBox();
+                    }
+                    final short = shortsState.items[index];
+                    return SizedBox(
+                      width: 150,
+                      child: ShortsCard(video: short),
+                    );
+                  },
+                ),
         ),
 
         const Divider(height: 32),
@@ -62,26 +109,30 @@ class HomePage extends ConsumerWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
-        videosAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => Center(child: Text('Error: $error')),
-          data: (videos) {
-            if (videos.isEmpty) {
-              return const Center(child: Text('No videos found.'));
-            }
-            // Use standard VideoCard for normal videos
-            // We use shrinkWrap and physics because it's inside another ListView
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: videos.length,
-              itemBuilder: (context, index) {
-                final video = videos[index];
-                return VideoCard(video: video);
-              },
-            );
-          },
-        ),
+        if (isInitialLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (videosState.items.isEmpty)
+          const Center(child: Text('No videos found.'))
+        else
+          // --- 9. Build the videos list ---
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(), // Important inside another ListView
+            itemCount: videosState.items.length + (videosState.hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              // --- 10. Show loading indicator at the end ---
+              if (index == videosState.items.length) {
+                return videosState.isLoadingMore
+                    ? const Center(child: CircularProgressIndicator())
+                    : const SizedBox();
+              }
+              final video = videosState.items[index];
+              return VideoCard(video: video);
+            },
+          ),
+        
+        // Add padding at the bottom so we can see the final loader
+        const SizedBox(height: 40),
       ],
     );
   }

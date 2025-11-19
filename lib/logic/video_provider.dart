@@ -43,6 +43,7 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
   T _fromDocument(Document doc);
 
   Future<void> fetchFirstBatch() async {
+    // If we already have items, don't re-fetch automatically unless forced
     if (state.items.isNotEmpty) return;
 
     state = state.copyWith(isLoadingMore: true, hasMore: true);
@@ -155,7 +156,6 @@ final shortsListProvider = StateNotifierProvider<ShortsListNotifier, PaginationS
 // B. NORMAL VIDEOS NOTIFIER
 class VideosListNotifier extends PaginatedListNotifier<Video> {
   VideosListNotifier(super.ref) {
-    // Auto fetch on init
     fetchFirstBatch();
   }
 
@@ -211,6 +211,7 @@ final paginatedUserVideosProvider = StateNotifierProvider<UserVideosNotifier, Pa
 });
 
 // D. LINK NOTIFIERS (Likes, History, Watch Later)
+// This handles lists that are just links to videos (userId + videoId)
 class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   PaginatedLinkNotifier(super.ref, {required this.collectionId}) {
     fetchFirstBatch();
@@ -226,12 +227,13 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
 
+    // Ensure we sort by the system attribute $createdAt
     final response = await ref.read(databasesProvider).listDocuments(
       databaseId: AppwriteClient.databaseId,
       collectionId: collectionId,
       queries: [
         Query.equal('userId', user.$id),
-        Query.orderDesc('\$createdAt'),
+        Query.orderDesc('\$createdAt'), // Corrected to use system attribute
         ...queries,
       ],
     );
@@ -239,14 +241,17 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   }
 }
 
+// Used for Liked Videos Page
 final paginatedLikedVideosProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) {
   return PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdLikes);
 });
 
+// Used for generic history lists (if needed)
 final paginatedHistoryProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) {
   return PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdHistory);
 });
 
+// Used for Watch Later Page
 final paginatedWatchLaterProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) {
   return PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdWatchLater);
 });
@@ -265,20 +270,25 @@ class PaginatedFollowingNotifier extends PaginatedListNotifier<Video> {
     final currentUserId = ref.read(authProvider).user?.$id;
     if (currentUserId == null) return [];
 
-    final followingResponse = await ref.read(databasesProvider).listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdSubscriptions,
-      queries: [
-        Query.equal('followerId', currentUserId),
-        Query.limit(5000) 
-      ],
-    );
-    
-    _followingIds = followingResponse.documents
-        .map((doc) => doc.data['followingId'] as String)
-        .toList();
-    
-    return _followingIds!;
+    try {
+      final followingResponse = await ref.read(databasesProvider).listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdSubscriptions,
+        queries: [
+          Query.equal('followerId', currentUserId),
+          Query.limit(100) // Fetch first 100 followed users
+        ],
+      );
+      
+      _followingIds = followingResponse.documents
+          .map((doc) => doc.data['followingId'] as String)
+          .toList();
+      
+      return _followingIds!;
+    } catch (e) {
+      print("Error fetching following IDs: $e");
+      return [];
+    }
   }
 
   @override
@@ -289,7 +299,7 @@ class PaginatedFollowingNotifier extends PaginatedListNotifier<Video> {
     final followingIds = await _getFollowingIds();
     if (followingIds.isEmpty) return [];
 
-    // Safe Slicing to prevent 400 Error on large follow lists
+    // Appwrite limits query length, so we slice if too many followed users
     final safeIds = followingIds.length > 100 
         ? followingIds.sublist(0, 100) 
         : followingIds;
@@ -337,7 +347,9 @@ final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref,
   return allVideos.where((v) => v.id != currentVideoId).toList();
 });
 
-// Deprecated Providers (Returning empty to prevent breakages if referenced)
+// Deprecated Providers (Returning empty lists safely)
+// These are kept to avoid errors if any old UI code still imports them, 
+// but they effectively do nothing now.
 final userVideosProvider = FutureProvider<List<Video>>((ref) async => []);
 final likedVideosProvider = FutureProvider<List<Video>>((ref) async => []);
 final watchLaterProvider = FutureProvider<List<Video>>((ref) async => []);

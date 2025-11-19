@@ -114,7 +114,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
           _isBuffering = false; 
         });
         
-        // If this is the first video the user sees, play and log it immediately
+        // Auto-play if this is the active slide
         if (ref.read(activeShortsIndexProvider) == widget.index) {
           _playAndLog();
         }
@@ -125,11 +125,17 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     }
   }
 
+  // Helper to ensure we log only once per session
   void _playAndLog() {
-    _controller?.play();
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    
+    _controller!.play();
+    
+    // FIXED: Log view only once
     if (!_hasLoggedView) {
       _hasLoggedView = true;
-      ref.read(interactionProvider).logVideoView(widget.video.id, widget.video.viewCount);
+      // FIXED: No second argument
+      ref.read(interactionProvider).logVideoView(widget.video.id);
     }
   }
 
@@ -146,7 +152,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
     // 3. API Call
     try {
-      // Fixed: 1 argument call
       await ref.read(interactionProvider).toggleLike(widget.video.id);
     } catch (e) {
       // Revert on error
@@ -159,7 +164,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   void _toggleSave() async {
     await ref.read(interactionProvider).toggleWatchLater(widget.video.id);
-    // Force refresh the provider to update the bookmark icon
     ref.invalidate(isSavedProvider(widget.video.id));
   }
 
@@ -197,11 +201,17 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. Video Layer & Tap to Pause
+        // 1. Video Layer & Tap to Pause/Play
         GestureDetector(
           onTap: () {
             if (_controller != null && _controller!.value.isInitialized) {
-               _controller!.value.isPlaying ? _controller!.pause() : _controller!.play();
+               if (_controller!.value.isPlaying) {
+                 _controller!.pause();
+               } else {
+                 // FIXED: Use _playAndLog instead of just .play() 
+                 // This ensures manual plays also count towards history
+                 _playAndLog();
+               }
                setState(() {}); 
             }
           },

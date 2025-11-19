@@ -4,7 +4,7 @@ import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; // Import for video invalidation
+import 'package:ofgconnects_mobile/logic/video_provider.dart'; // Important for refreshing video details
 
 // 1. State Class
 class CommentsState {
@@ -68,7 +68,7 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
     }
   }
 
-  // Load More Comments
+  // Load More Comments (Pagination)
   Future<void> loadMore(String videoId) async {
     if (state.isLoading || !state.hasMore || state.lastId == null) return;
 
@@ -97,10 +97,10 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
     }
   }
 
-  // Post Comment Function (FIXED)
+  // Post Comment
   Future<void> postComment({required String videoId, required String content, String? parentId}) async {
     final user = ref.read(authProvider).user;
-    if (user == null) throw Exception("Login required");
+    if (user == null) throw Exception("Login required to comment");
 
     final databases = AppwriteClient.databases;
 
@@ -119,18 +119,20 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
           'createdAt': DateTime.now().toIso8601String(),
         },
         permissions: [
-          Permission.read(Role.any()),
-          Permission.update(Role.user(user.$id)),
-          Permission.delete(Role.user(user.$id)),
+          Permission.read(Role.any()), // Visible to all
+          Permission.update(Role.user(user.$id)), // Editable by owner
+          Permission.delete(Role.user(user.$id)), // Deletable by owner
         ]
       );
 
-      // B. Update Comment Count on Video
+      // B. Update local state (Optimistic UI)
+      // If it's a top-level comment, add it to the top of the list immediately
       if (parentId == null) {
-        // Optimistically update local list
         state = state.copyWith(comments: [newComment, ...state.comments]);
-
+        
+        // C. Increment Comment Count on Video
         try {
+           // Fetch fresh video data to be safe
            final videoDoc = await databases.getDocument(
              databaseId: AppwriteClient.databaseId, 
              collectionId: AppwriteClient.collectionIdVideos, 
@@ -146,14 +148,14 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
              data: { 'commentCount': currentCount + 1 }
            );
            
-           // Refresh video details to show new count on UI
+           // Refresh video details provider so the "Comment Icon" count updates in UI
            ref.invalidate(videoDetailsProvider(videoId));
            
         } catch (e) {
           print("Failed to update comment count: $e");
         }
       } else {
-        // If it's a reply, just refresh the replies for that comment
+        // If reply, invalidate the specific replies provider
         ref.invalidate(repliesProvider(parentId));
       }
     } catch (e) {
@@ -168,6 +170,7 @@ final commentsProvider = StateNotifierProvider<CommentsNotifier, CommentsState>(
   return CommentsNotifier(ref);
 });
 
+// Provider to fetch replies for a specific comment
 final repliesProvider = FutureProvider.family<List<Document>, String>((ref, parentId) async {
   try {
     final response = await AppwriteClient.databases.listDocuments(

@@ -47,6 +47,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     final currentVideoId = widget.videoId;
 
     try {
+      // Use .future to get the value once without setting up a stream listener here
       final video = await ref.read(videoDetailsProvider(widget.videoId).future);
       
       if (!mounted || widget.videoId != currentVideoId) return;
@@ -71,6 +72,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       _controller = newController;
       _controller!.play();
       
+      // Record history (and increment view count)
       _recordHistory(video);
 
       setState(() {
@@ -91,7 +93,9 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     final user = ref.read(authProvider).user;
     if (user == null) return;
     try {
-      await ref.read(interactionProvider).logVideoView(video.id, video.viewCount);
+      // FIXED: Calling logVideoView with just the ID. 
+      // The provider will fetch the latest view count from the DB to increment it accurately.
+      await ref.read(interactionProvider).logVideoView(video.id);
     } catch (e) {
       print('Error recording history: $e');
     }
@@ -303,7 +307,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
 
   Widget _buildActionButtons(BuildContext context, Video video) {
-    // FIXED: Use providers instead of calling logic directly in build
     final isLikedAsync = ref.watch(isLikedProvider(video.id));
     final isSavedAsync = ref.watch(isSavedProvider(video.id));
 
@@ -314,7 +317,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         isLikedAsync.when(
           data: (isLiked) {
             return InkWell(
-              // FIXED: toggleLike only needs videoId now
               onTap: () => ref.read(interactionProvider).toggleLike(video.id),
               borderRadius: BorderRadius.circular(30),
               child: Padding(
@@ -359,7 +361,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             return InkWell(
               onTap: () async {
                 await ref.read(interactionProvider).toggleWatchLater(video.id);
-                // No need to setState, provider invalidation handles update
               },
               borderRadius: BorderRadius.circular(30),
               child: Padding(

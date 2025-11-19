@@ -4,7 +4,10 @@ import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+// Import video provider to refresh view/comment counts
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
 
+// 1. State Class (Defines the data structure)
 class CommentsState {
   final List<Document> comments;
   final bool isLoading;
@@ -33,6 +36,7 @@ class CommentsState {
   }
 }
 
+// 2. Notifier Class (Handles logic)
 class CommentsNotifier extends StateNotifier<CommentsState> {
   CommentsNotifier(this.ref) : super(CommentsState());
   final Ref ref;
@@ -47,7 +51,7 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
         collectionId: AppwriteClient.collectionIdComments,
         queries: [
           Query.equal('videoId', videoId),
-          Query.equal('parent_id', null), 
+          Query.isNull('parent_id'), // Only fetch top-level comments
           Query.orderDesc('\$createdAt'),
           Query.limit(_limit),
         ],
@@ -65,7 +69,7 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
     }
   }
 
-  // Load More Comments
+  // Load More Comments (Pagination)
   Future<void> loadMore(String videoId) async {
     if (state.isLoading || !state.hasMore || state.lastId == null) return;
 
@@ -76,7 +80,7 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
         collectionId: AppwriteClient.collectionIdComments,
         queries: [
           Query.equal('videoId', videoId),
-          Query.equal('parent_id', null),
+          Query.isNull('parent_id'),
           Query.orderDesc('\$createdAt'),
           Query.limit(_limit),
           Query.cursorAfter(state.lastId!),
@@ -94,37 +98,74 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
     }
   }
 
+  // Post a Comment
   Future<void> postComment({required String videoId, required String content, String? parentId}) async {
     final user = ref.read(authProvider).user;
     if (user == null) throw Exception("Login required");
 
-    final newComment = await AppwriteClient.databases.createDocument(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdComments,
-      documentId: ID.unique(),
-      data: {
-        'content': content,
-        'videoId': videoId,
-        'username': user.name,
-        'userId': user.$id,
-        'parent_id': parentId,
-        'createdAt': DateTime.now().toIso8601String(),
-      },
-      permissions: [
-        Permission.read(Role.any()),
-        Permission.update(Role.user(user.$id)),
-        Permission.delete(Role.user(user.$id)),
-      ]
-    );
+    final databases = AppwriteClient.databases;
 
-    if (parentId == null) {
-      state = state.copyWith(comments: [newComment, ...state.comments]);
-    } else {
-      ref.invalidate(repliesProvider(parentId));
+    try {
+      // A. Create Comment in DB
+      final newComment = await databases.createDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdComments,
+        documentId: ID.unique(),
+        data: {
+          'content': content,
+          'videoId': videoId,
+          'username': user.name,
+          'userId': user.$id,
+          'parent_id': parentId,
+          'createdAt': DateTime.now().toIso8601String(),
+        },
+        permissions: [
+          Permission.read(Role.any()),
+          Permission.update(Role.user(user.$id)),
+          Permission.delete(Role.user(user.$id)),
+        ]
+      );
+
+      // B. Update Comment Count on Video
+      if (parentId == null) {
+        // Optimistically update local list
+        state = state.copyWith(comments: [newComment, ...state.comments]);
+
+        // Update video document counter
+        try {
+           final videoDoc = await databases.getDocument(
+             databaseId: AppwriteClient.databaseId, 
+             collectionId: AppwriteClient.collectionIdVideos, 
+             documentId: videoId
+           );
+           
+           final currentCount = videoDoc.data['commentCount'] ?? 0;
+           
+           await databases.updateDocument(
+             databaseId: AppwriteClient.databaseId,
+             collectionId: AppwriteClient.collectionIdVideos,
+             documentId: videoId,
+             data: { 'commentCount': currentCount + 1 }
+           );
+           
+           // Refresh video details to show new count on UI
+           ref.invalidate(videoDetailsProvider(videoId));
+           
+        } catch (e) {
+          print("Failed to update comment count: $e");
+        }
+      } else {
+        // If it's a reply, just refresh the replies for that comment
+        ref.invalidate(repliesProvider(parentId));
+      }
+    } catch (e) {
+      print("Error posting comment: $e");
+      rethrow;
     }
   }
 }
 
+// 3. Providers
 final commentsProvider = StateNotifierProvider<CommentsNotifier, CommentsState>((ref) {
   return CommentsNotifier(ref);
 });

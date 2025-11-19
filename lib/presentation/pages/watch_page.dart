@@ -52,17 +52,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       
       if (!mounted || widget.videoId != currentVideoId) return;
 
-      if (video == null) {
-        setState(() => _errorMessage = "Video not found");
-        return;
-      }
-      
-      if (video.videoUrl.isEmpty) {
-         setState(() => _errorMessage = "Video URL is invalid");
+      if (video == null || video.videoUrl.isEmpty) {
+         setState(() => _errorMessage = "Video not found or invalid URL");
          return;
       }
 
-      final newController = VideoPlayerController.networkUrl(Uri.parse(video.videoUrl));
+      // --- FIX: Use networkUrl for INSTANT Streaming ---
+      final newController = VideoPlayerController.networkUrl(
+        Uri.parse(video.videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true), 
+      );
+      
       await newController.initialize();
 
       if (!mounted || widget.videoId != currentVideoId) {
@@ -83,7 +83,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       if (mounted && widget.videoId == currentVideoId) {
         setState(() {
           _isLoading = false;
-          _errorMessage = "Error loading video: $e";
+          _errorMessage = "Error loading video. Check internet connection.";
         });
       }
     }
@@ -92,7 +92,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   Future<void> _recordHistory(Video video) async {
     final user = ref.read(authProvider).user;
     if (user == null) return;
-
     try {
       await ref.read(interactionProvider).logVideoView(video.id, video.viewCount);
     } catch (e) {
@@ -111,6 +110,9 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     super.dispose();
   }
 
+  // ... [KEEP _showComments, build, _buildCreatorInfo, _buildActionButtons, CommentsSheet, CommentTile EXACTLY AS THEY WERE] ...
+  // (I am omitting them here to save space, paste the rest of the previous file below this line)
+  
   void _showComments(BuildContext context, String videoId) {
     showModalBottomSheet(
       context: context,
@@ -152,7 +154,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                 child: Container(
                   color: Colors.black,
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
                       : _errorMessage != null
                           ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white)))
                           : GestureDetector(
@@ -167,7 +169,10 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                                 alignment: Alignment.bottomCenter,
                                 children: [
                                   VideoPlayer(_controller!),
-                                  if (!_controller!.value.isPlaying)
+                                  // Show buffering indicator if playing but buffering
+                                  if (_controller!.value.isBuffering)
+                                    const Center(child: CircularProgressIndicator(color: Colors.white)),
+                                  if (!_controller!.value.isPlaying && !_controller!.value.isBuffering)
                                     const Center(
                                       child: Icon(Icons.play_circle_outline, size: 64, color: Colors.white54),
                                     ),

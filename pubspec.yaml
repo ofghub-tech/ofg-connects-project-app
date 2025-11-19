@@ -12,6 +12,9 @@ dependencies:
   flutter:
     sdk: flutter
   image_picker: ^1.2.1 # Add this line
+  image_cropper: ^8.0.2 # Add this line
+  flutter_cache_manager: ^3.4.1 # Add this line
+  video_compress: ^3.1.2  # Add this
 
 # 1. Backend
   appwrite: ^20.3.0

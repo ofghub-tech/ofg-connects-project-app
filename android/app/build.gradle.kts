@@ -24,7 +24,11 @@ android {
         applicationId = "com.example.ofgconnects_mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        
+        // --- FIX: Changed from flutter.minSdkVersion to 21 for video_compress ---
+        minSdk = flutter.minSdkVersion 
+        // ------------------------------------------------------------------------
+        
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -19,7 +19,7 @@ class ShortsPlayer extends ConsumerStatefulWidget {
 class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
-  bool _isBuffering = false; // New state to track buffering
+  bool _isBuffering = true;
 
   @override
   void initState() {
@@ -29,13 +29,17 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   Future<void> _initializePlayer() async {
     try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(widget.video.videoUrl));
+      // FIX: Use networkUrl to stream immediately instead of downloading full file
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.video.videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
       
-      // Listen for buffering events
       controller.addListener(() {
+        if (!mounted) return;
         final isBuffering = controller.value.isBuffering;
         if (isBuffering != _isBuffering) {
-           if (mounted) setState(() => _isBuffering = isBuffering);
+           setState(() => _isBuffering = isBuffering);
         }
       });
 
@@ -46,6 +50,8 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
         setState(() {
           _controller = controller;
           _isInitialized = true;
+          // If video has buffered enough to start, stop loading spinner
+          _isBuffering = false; 
         });
         
         if (ref.read(activeShortsIndexProvider) == widget.index) {
@@ -54,6 +60,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
       }
     } catch (e) {
       print("Error loading short: $e");
+      if(mounted) setState(() => _isBuffering = false);
     }
   }
 
@@ -74,9 +81,8 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     });
 
     return Stack(
-      fit: StackFit.expand, // Ensure Stack takes full space
+      fit: StackFit.expand,
       children: [
-        // 1. Video Layer (Full Screen)
         GestureDetector(
           onTap: () {
             if (_controller != null && _controller!.value.isInitialized) {
@@ -90,8 +96,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
               child: _isInitialized
                   ? SizedBox.expand(
                       child: FittedBox(
-                        // This makes it immersive like TikTok (fills screen)
-                        // If you want to see the whole video without cropping, change to BoxFit.contain
                         fit: BoxFit.cover, 
                         child: SizedBox(
                           width: _controller!.value.size.width,
@@ -100,46 +104,51 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                         ),
                       ),
                     )
-                  : const SizedBox(), // Show nothing while initializing (spinner is below)
+                  : const SizedBox(), 
             ),
           ),
         ),
 
-        // 2. Buffering / Loading Indicator (Center)
         if (!_isInitialized || _isBuffering)
           const Center(
             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
           ),
           
-        // 3. Play/Pause Icon (Transient feedback)
         if (_isInitialized && !_controller!.value.isPlaying && !_isBuffering)
           const Center(
             child: Icon(Icons.play_arrow, size: 60, color: Colors.white54),
           ),
 
-        // 4. Gradient Overlay (Bottom)
-        Positioned(
-          bottom: 0, left: 0, right: 0,
-          child: Container(
-            height: 250, // Taller gradient for better readability
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.black.withOpacity(0.9), Colors.transparent],
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-              ),
-            ),
+        _buildGradientOverlay(),
+        _buildRightSideActions(context, ref),
+        _buildBottomInfo(),
+      ],
+    );
+  }
+
+  Widget _buildGradientOverlay() {
+    return Positioned(
+      bottom: 0, left: 0, right: 0,
+      child: Container(
+        height: 250,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.black.withOpacity(0.9), Colors.transparent],
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
           ),
         ),
+      ),
+    );
+  }
 
-        // 5. Right Side Actions
-        Positioned(
+  Widget _buildRightSideActions(BuildContext context, WidgetRef ref) {
+     return Positioned(
           right: 8,
-          bottom: 100, // Adjusted to not overlap with nav bar
+          bottom: 100,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-               // Like Button (Connected to Logic)
                Consumer(
                 builder: (context, ref, child) {
                    final isLikedAsync = ref.watch(isLikedProvider(widget.video.id));
@@ -154,40 +163,24 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                 },
                ),
               const SizedBox(height: 24),
-              
               _buildActionButton(
                 icon: Icons.comment_rounded,
                 label: 'Comment',
                 color: Colors.white,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Comments coming soon!")));
-                },
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Comments coming soon!"))),
               ),
               const SizedBox(height: 24),
-              
-              _buildActionButton(
-                icon: Icons.share_rounded,
-                label: 'Share',
-                color: Colors.white,
-                onTap: () {},
-              ),
+               _buildActionButton(icon: Icons.share_rounded, label: 'Share', color: Colors.white, onTap: () {}),
               const SizedBox(height: 24),
-              
-               _buildActionButton(
-                icon: Icons.more_horiz,
-                label: 'More',
-                color: Colors.white,
-                onTap: () {},
-              ),
+               _buildActionButton(icon: Icons.more_horiz, label: 'More', color: Colors.white, onTap: () {}),
             ],
           ),
-        ),
+        );
+  }
 
-        // 6. Bottom Info
-        Positioned(
-          bottom: 20,
-          left: 16,
-          right: 80, // Leave space for right buttons
+  Widget _buildBottomInfo() {
+      return Positioned(
+          bottom: 20, left: 16, right: 80,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -195,12 +188,8 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundImage: null, // You can add user image URL here
                     backgroundColor: Colors.grey[800],
-                    child: Text(
-                      widget.video.creatorName.isNotEmpty ? widget.video.creatorName[0].toUpperCase() : 'U',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
+                    child: Text(widget.video.creatorName.isNotEmpty ? widget.video.creatorName[0].toUpperCase() : 'U'),
                   ),
                   const SizedBox(width: 10),
                   Text(
@@ -211,17 +200,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                       fontSize: 16,
                       shadows: [Shadow(color: Colors.black, blurRadius: 2)],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  
-                  // Optional Follow Button
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white54),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text("Follow", style: TextStyle(color: Colors.white, fontSize: 10)),
                   ),
                 ],
               ),
@@ -238,9 +216,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
               ),
             ],
           ),
-        ),
-      ],
-    );
+        );
   }
 
   Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
@@ -251,7 +227,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1), // Glassmorphism background
+              color: Colors.white.withOpacity(0.1), 
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 32),

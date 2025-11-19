@@ -4,8 +4,9 @@ import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:video_compress/video_compress.dart';
+import 'package:path/path.dart' as p;
 
-// State to track upload progress
 class UploadState {
   final bool isLoading;
   final double progress;
@@ -33,52 +34,95 @@ class UploadNotifier extends StateNotifier<UploadState> {
     required String category,
     required String tags,
   }) async {
-    // 1. Get Current User
     final user = ref.read(authProvider).user;
     if (user == null) {
       state = UploadState(error: "You must be logged in to upload.");
       return;
     }
 
-    state = UploadState(isLoading: true, progress: 0.1);
+    state = UploadState(isLoading: true, progress: 0.0, successMessage: "Preparing...");
 
     String? videoId;
     String? thumbnailId;
+    Subscription? subscription;
 
     try {
       final storage = AppwriteClient.storage;
       final databases = AppwriteClient.databases;
 
-      // 2. Upload Video File
-      // Replicates: storage.createFile(BUCKET_ID_VIDEOS...)
+      // --- 1. COMPRESSION LOGIC ---
+      File fileToUpload = videoFile;
+      
+      try {
+        state = UploadState(isLoading: true, progress: 0.05, successMessage: "Compressing video...");
+        
+        subscription = VideoCompress.compressProgress$.subscribe((progress) {
+           state = UploadState(
+             isLoading: true, 
+             progress: (progress / 100) * 0.3, // First 30% is compression
+             successMessage: "Compressing... ${progress.toInt()}%"
+           );
+        });
+
+        final MediaInfo? mediaInfo = await VideoCompress.compressVideo(
+          videoFile.path,
+          quality: VideoQuality.MediumQuality, 
+          deleteOrigin: false,
+        );
+
+        if (mediaInfo != null && mediaInfo.file != null) {
+          fileToUpload = mediaInfo.file!;
+        }
+      } catch (e) {
+        print("Compression failed, uploading original file: $e");
+        // Fallback to original file if compression fails
+      }
+
+      // --- 2. UPLOAD VIDEO ---
+      state = UploadState(isLoading: true, progress: 0.3, successMessage: "Uploading Video...");
+
       videoId = ID.unique();
+      final String videoFileName = 'video_${DateTime.now().millisecondsSinceEpoch}${p.extension(fileToUpload.path)}';
+
       await storage.createFile(
         bucketId: AppwriteClient.bucketIdVideos,
         fileId: videoId,
-        file: InputFile.fromPath(path: videoFile.path),
+        // Explicitly provide filename for correct mime-type detection
+        file: InputFile.fromPath(
+          path: fileToUpload.path, 
+          filename: videoFileName
+        ),
         permissions: [Permission.read(Role.any())],
         onProgress: (uploadProgress) {
-          // Update state with progress (0% to 80% allocated for video)
-          final percent = (uploadProgress.progress / 100) * 0.8;
-          state = UploadState(isLoading: true, progress: percent);
+          // Map upload (0-100) to progress range (0.3 - 0.9)
+          final percent = 0.3 + ((uploadProgress.progress / 100) * 0.6);
+          state = UploadState(
+            isLoading: true, 
+            progress: percent, 
+            successMessage: "Uploading... ${uploadProgress.progress.toInt()}%"
+          );
         },
       );
 
-      // Generate View URL immediately after upload
       final videoUrlPath = storage.getFileView(
         bucketId: AppwriteClient.bucketIdVideos,
         fileId: videoId,
       ).toString();
 
-      // 3. Upload Thumbnail (Optional)
-      // Replicates: if (thumbnailFile) ... storage.createFile(...)
+      // --- 3. UPLOAD THUMBNAIL ---
       String? thumbnailUrlPath;
       if (thumbnailFile != null) {
+        state = UploadState(isLoading: true, progress: 0.92, successMessage: "Uploading Thumbnail...");
         thumbnailId = ID.unique();
+        final String thumbFileName = 'thumb_${DateTime.now().millisecondsSinceEpoch}${p.extension(thumbnailFile.path)}';
+
         await storage.createFile(
-          bucketId: AppwriteClient.bucketIdVideos, // Web app uses same bucket
+          bucketId: AppwriteClient.bucketIdVideos,
           fileId: thumbnailId,
-          file: InputFile.fromPath(path: thumbnailFile.path),
+          file: InputFile.fromPath(
+            path: thumbnailFile.path, 
+            filename: thumbFileName
+          ),
           permissions: [Permission.read(Role.any())],
         );
         
@@ -88,14 +132,13 @@ class UploadNotifier extends StateNotifier<UploadState> {
         ).toString();
       }
 
-      state = UploadState(isLoading: true, progress: 0.9);
+      // --- 4. CREATE DATABASE DOCUMENT ---
+      state = UploadState(isLoading: true, progress: 0.98, successMessage: "Finalizing...");
 
-      // 4. Create Database Document
-      // Replicates: databases.createDocument(...)
       await databases.createDocument(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdVideos,
-        documentId: videoId, // Using video file ID as doc ID is a common pattern
+        documentId: videoId, // Use video file ID as doc ID
         data: {
           'title': title,
           'description': description,
@@ -108,24 +151,33 @@ class UploadNotifier extends StateNotifier<UploadState> {
           'view_count': 0,
           'likeCount': 0,
           'commentCount': 0,
-          'createdAt': DateTime.now().toIso8601String(),
+          'createdAt': DateTime.now().toIso8601String(), 
         },
+        permissions: [
+          Permission.read(Role.any()),
+          Permission.update(Role.user(user.$id)),
+          Permission.delete(Role.user(user.$id)),
+        ]
       );
+      
+      // Cleanup cache
+      await VideoCompress.deleteAllCache();
 
       state = UploadState(isLoading: false, progress: 1.0, successMessage: "Upload Successful!");
 
     } catch (e) {
-      // 5. Cleanup (Replicating the useEffect cleanup logic from web)
-      // If DB write fails, delete the uploaded files to save space
-      final storage = AppwriteClient.storage;
+      print("Upload Error: $e");
+      // Cleanup orphaned files using static client
       if (videoId != null) {
-        try { await storage.deleteFile(bucketId: AppwriteClient.bucketIdVideos, fileId: videoId); } catch (_) {}
+        try { await AppwriteClient.storage.deleteFile(bucketId: AppwriteClient.bucketIdVideos, fileId: videoId); } catch (_) {}
       }
       if (thumbnailId != null) {
-        try { await storage.deleteFile(bucketId: AppwriteClient.bucketIdVideos, fileId: thumbnailId); } catch (_) {}
+        try { await AppwriteClient.storage.deleteFile(bucketId: AppwriteClient.bucketIdVideos, fileId: thumbnailId); } catch (_) {}
       }
 
       state = UploadState(isLoading: false, error: e.toString());
+    } finally {
+      subscription?.unsubscribe();
     }
   }
 }

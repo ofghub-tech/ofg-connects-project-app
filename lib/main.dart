@@ -1,24 +1,24 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// Application imports
 import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+  
+  // Make status bar transparent for immersive feel
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
 
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-// MyApp is a ConsumerStatefulWidget so we can access Riverpod ref in lifecycle methods.
 class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
@@ -39,37 +39,83 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Only re-check authentication status when the app resumes.
-  // We DO NOT navigate here. Navigation is handled by AuthGate which lives
-  // inside the router and therefore has a valid GoRouter context.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
-
     if (state == AppLifecycleState.resumed) {
       // small delay to allow Appwrite SDK / browser redirect to settle
       await Future.delayed(const Duration(milliseconds: 1000));
-
-      // Use ref.read to call the notifier — this won't try to navigate.
-      if (mounted) {
-        ref.read(authProvider.notifier).checkUserStatus();
-      }
+      if (mounted) ref.read(authProvider.notifier).checkUserStatus();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // IMPORTANT:
-    // Do NOT call GoRouter.of(context) or context.go(...) from here.
-    // Any provider listeners that need to navigate should be inside widgets
-    // placed beneath MaterialApp.router (e.g., your AuthGate).
     return MaterialApp.router(
-      routerConfig: router, // your router from app_router.dart
+      routerConfig: router,
       title: 'OFG Connects',
-      theme: ThemeData.light(),
-      darkTheme: ThemeData.dark(),
-      themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
+      
+      // --- THEME CONFIGURATION ---
+      themeMode: ThemeMode.dark,
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: Colors.blueAccent,
+        
+        // Modern AppBar
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF121212),
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            fontSize: 22, 
+            fontWeight: FontWeight.bold, 
+            letterSpacing: -0.5,
+            color: Colors.white
+          ),
+        ),
+        
+        // Card Styling - FIXED: Using CardThemeData for newer Flutter versions
+        cardTheme: CardThemeData( 
+          color: const Color(0xFF1E1E1E),
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+
+        // Input Decoration
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF2C2C2C),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
+          ),
+        ),
+
+        // Elevated Button Styling
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        
+        // Text Theme
+        textTheme: const TextTheme(
+          headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3),
+          bodyMedium: TextStyle(fontSize: 14, color: Colors.white70),
+        ),
+      ),
     );
   }
 }

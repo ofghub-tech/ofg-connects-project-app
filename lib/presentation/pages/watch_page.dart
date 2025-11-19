@@ -2,14 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/logic/comments_provider.dart'; // Import comments provider
+import 'package:ofgconnects_mobile/logic/comments_provider.dart'; 
 import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:video_player/video_player.dart';
-import 'package:appwrite/models.dart' as models; // To avoid conflict with Video model if needed
+import 'package:appwrite/models.dart' as models;
 
 class WatchPage extends ConsumerStatefulWidget {
   final String videoId; 
@@ -45,35 +45,42 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
 
   Future<void> _initializePage() async {
+    final currentVideoId = widget.videoId;
+
     try {
       final video = await ref.read(videoDetailsProvider(widget.videoId).future);
       
+      if (!mounted || widget.videoId != currentVideoId) return;
+
       if (video == null) {
-        if (mounted) setState(() => _errorMessage = "Video not found");
+        setState(() => _errorMessage = "Video not found");
         return;
       }
       
       if (video.videoUrl.isEmpty) {
-         if (mounted) setState(() => _errorMessage = "Video URL is invalid");
+         setState(() => _errorMessage = "Video URL is invalid");
          return;
       }
 
-      _controller = VideoPlayerController.networkUrl(Uri.parse(video.videoUrl));
-      await _controller!.initialize();
-      
+      final newController = VideoPlayerController.networkUrl(Uri.parse(video.videoUrl));
+      await newController.initialize();
+
+      if (!mounted || widget.videoId != currentVideoId) {
+        newController.dispose(); 
+        return;
+      }
+
+      _controller = newController;
       _controller!.play();
       
-      // Log history in background
       _recordHistory(video);
 
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _isLoading = false;
+      });
     } catch (e) {
       print("Error initializing player: $e");
-      if (mounted) {
+      if (mounted && widget.videoId == currentVideoId) {
         setState(() {
           _isLoading = false;
           _errorMessage = "Error loading video: $e";
@@ -107,7 +114,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   void _showComments(BuildContext context, String videoId) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Allows the sheet to be taller
+      isScrollControlled: true,
       backgroundColor: Colors.grey[900],
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -137,39 +144,41 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // --- VIDEO PLAYER ---
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                color: Colors.black,
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _errorMessage != null
-                        ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white)))
-                        : GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _controller!.value.isPlaying
-                                    ? _controller!.pause()
-                                    : _controller!.play();
-                              });
-                            },
-                            child: Stack(
-                              alignment: Alignment.bottomCenter,
-                              children: [
-                                VideoPlayer(_controller!),
-                                if (!_controller!.value.isPlaying)
-                                  const Center(
-                                    child: Icon(Icons.play_circle_outline, size: 64, color: Colors.white54),
-                                  ),
-                                VideoProgressIndicator(_controller!, allowScrubbing: true),
-                              ],
+            // --- HERO ANIMATION WRAPPER ---
+            Hero(
+              tag: 'video_thumbnail_${widget.videoId}', 
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  color: Colors.black,
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _errorMessage != null
+                          ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white)))
+                          : GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _controller!.value.isPlaying
+                                      ? _controller!.pause()
+                                      : _controller!.play();
+                                });
+                              },
+                              child: Stack(
+                                alignment: Alignment.bottomCenter,
+                                children: [
+                                  VideoPlayer(_controller!),
+                                  if (!_controller!.value.isPlaying)
+                                    const Center(
+                                      child: Icon(Icons.play_circle_outline, size: 64, color: Colors.white54),
+                                    ),
+                                  VideoProgressIndicator(_controller!, allowScrubbing: true),
+                                ],
+                              ),
                             ),
-                          ),
+                ),
               ),
             ),
 
-            // --- DETAILS ---
             Expanded(
               child: videoAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -193,7 +202,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
                       _buildCreatorInfo(context, video),
                       
-                      // Pass the videoId to the action buttons to open comments
                       _buildActionButtons(context, video),
                       
                       const SizedBox(height: 16),
@@ -274,7 +282,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
   Widget _buildActionButtons(BuildContext context, Video video) {
     final isLikedAsync = ref.watch(isLikedProvider(video.id));
-    final isSavedAsync = ref.watch(interactionProvider).isVideoSaved(video.id);
+    final isSavedFuture = ref.watch(interactionProvider).isVideoSaved(video.id);
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -308,7 +316,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           const SizedBox(width: 8),
 
           FutureBuilder<bool>(
-            future: isSavedAsync,
+            future: isSavedFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2));
@@ -318,7 +326,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                 style: TextButton.styleFrom(foregroundColor: Colors.white),
                 onPressed: () async {
                   await ref.read(interactionProvider).toggleWatchLater(video.id);
-                  setState(() {}); 
+                  setState(() {});
                 },
                 icon: Icon(
                   isSaved ? Icons.bookmark_added : Icons.bookmark_add_outlined,
@@ -334,7 +342,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
 }
 
-// We'll store the comment we're replying to in a simple StateProvider
 final replyingToCommentProvider = StateProvider<models.Document?>((ref) => null);
 
 class CommentsSheet extends ConsumerStatefulWidget {
@@ -358,7 +365,6 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   @override
   void initState() {
     super.initState();
-    // Clear the reply state when the sheet opens
     Future.microtask(() {
       ref.read(replyingToCommentProvider.notifier).state = null;
       ref.read(commentsProvider.notifier).loadComments(widget.videoId);
@@ -374,7 +380,6 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   Future<void> _postComment() async {
     if (_commentController.text.trim().isEmpty) return;
     
-    // Get the comment we are replying to (if any)
     final replyingTo = ref.read(replyingToCommentProvider);
 
     setState(() => _isPosting = true);
@@ -382,12 +387,10 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
       await ref.read(commentsProvider.notifier).postComment(
         videoId: widget.videoId,
         content: _commentController.text.trim(),
-        parentId: replyingTo?.$id, // Pass the parentId
+        parentId: replyingTo?.$id,
       );
       _commentController.clear();
-      // Clear the reply state
       ref.read(replyingToCommentProvider.notifier).state = null;
-      // Dismiss keyboard
       FocusManager.instance.primaryFocus?.unfocus();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -400,15 +403,12 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // --- THIS WAS THE FIX ---
-    final commentsAsync = ref.watch(commentsProvider);
-    // ------------------------
-    // Watch the reply state to show UI feedback
+    final commentsState = ref.watch(commentsProvider);
+    final comments = commentsState.comments;
     final replyingTo = ref.watch(replyingToCommentProvider);
 
     return Column(
       children: [
-        // Handle bar
         const SizedBox(height: 12),
         Container(
           width: 40,
@@ -423,34 +423,37 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
           child: Text("Comments", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
         ),
         
-        // Comments List
         Expanded(
-          child: commentsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, s) => Center(child: Text('Error loading comments: $e', style: const TextStyle(color: Colors.white))),
-            data: (comments) {
-              if (comments.isEmpty) {
-                return const Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: Colors.grey)));
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (scrollInfo) {
+              if (!commentsState.isLoading && 
+                   commentsState.hasMore && 
+                   scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 100) {
+                ref.read(commentsProvider.notifier).loadMore(widget.videoId);
               }
-              return ListView.builder(
-                controller: widget.scrollController,
-                itemCount: comments.length,
-                itemBuilder: (context, index) {
-                  final comment = comments[index];
-                  // Use our new CommentTile widget
-                  return CommentTile(comment: comment);
-                },
-              );
+              return false;
             },
+            child: ListView.builder(
+              controller: widget.scrollController,
+              itemCount: comments.length + (commentsState.hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == comments.length) {
+                  return const Center(child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ));
+                }
+                return CommentTile(comment: comments[index]);
+              },
+            ),
           ),
         ),
 
-        // Input Field
         Container(
           padding: EdgeInsets.only(
             left: 16, 
             right: 16, 
-            top: 8, // Reduced padding
+            top: 8, 
             bottom: MediaQuery.of(context).viewInsets.bottom + 16
           ),
           decoration: const BoxDecoration(
@@ -460,7 +463,6 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Show "Replying to..." if we are replying
               if (replyingTo != null)
                 Row(
                   children: [
@@ -478,7 +480,6 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                     )
                   ],
                 ),
-              // Main input row
               Row(
                 children: [
                   Expanded(
@@ -508,7 +509,6 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   }
 }
 
-
 class CommentTile extends ConsumerStatefulWidget {
   final models.Document comment;
   const CommentTile({super.key, required this.comment});
@@ -531,7 +531,6 @@ class _CommentTileState extends ConsumerState<CommentTile> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. The main comment body
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -558,10 +557,8 @@ class _CommentTileState extends ConsumerState<CommentTile> {
                       style: const TextStyle(color: Colors.white70),
                     ),
                     const SizedBox(height: 8),
-                    // Reply button
                     GestureDetector(
                       onTap: () {
-                        // Set this comment as the one to reply to
                         ref.read(replyingToCommentProvider.notifier).state = widget.comment;
                       },
                       child: const Text(
@@ -575,19 +572,17 @@ class _CommentTileState extends ConsumerState<CommentTile> {
             ],
           ),
 
-          // 2. "View Replies" button and the replies list
           Padding(
-            padding: const EdgeInsets.only(left: 44.0), // Indent replies
+            padding: const EdgeInsets.only(left: 44.0), 
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // "View Replies" button (watches the provider)
                 Consumer(
                   builder: (context, ref, child) {
                     final repliesAsync = ref.watch(repliesProvider(widget.comment.$id));
                     return repliesAsync.when(
                       data: (replies) {
-                        if (replies.isEmpty) return const SizedBox.shrink(); // No replies, show nothing
+                        if (replies.isEmpty) return const SizedBox.shrink();
                         
                         return TextButton(
                           onPressed: () => setState(() => _showReplies = !_showReplies),
@@ -606,7 +601,6 @@ class _CommentTileState extends ConsumerState<CommentTile> {
                   },
                 ),
 
-                // The Replies List (conditionally shown)
                 if (_showReplies)
                   Consumer(
                     builder: (context, ref, child) {

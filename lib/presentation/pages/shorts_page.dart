@@ -15,16 +15,16 @@ class ShortsPage extends ConsumerStatefulWidget {
 
 class _ShortsPageState extends ConsumerState<ShortsPage> {
   late PageController _pageController;
-  bool _jumpedToInitialVideo = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
 
-    // Fetch initial batch of shorts
+    // Initializes the feed. If widget.videoId is not null, it loads that specific
+    // video first so the user lands on the correct content.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(shortsListProvider.notifier).fetchFirstBatch();
+      ref.read(shortsListProvider.notifier).init(widget.videoId);
     });
   }
 
@@ -36,63 +36,57 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Watch the new pagination state provider
     final shortsState = ref.watch(shortsListProvider);
     final shorts = shortsState.items;
 
-    // 2. Handle initial loading
+    // Loading state
     if (shorts.isEmpty && shortsState.isLoadingMore) {
-      return const Center(child: CircularProgressIndicator());
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
-    // 3. Handle no shorts found
+    // Empty state
     if (shorts.isEmpty && !shortsState.hasMore) {
-      return const Center(child: Text('No shorts found.'));
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text(
+            'No shorts found.', 
+            style: TextStyle(color: Colors.white),
+          )
+        ),
+      );
     }
 
-    // 4. Logic to jump to a specific video ID (if provided)
-    if (widget.videoId != null && shorts.isNotEmpty && !_jumpedToInitialVideo) {
-      final index = shorts.indexWhere((v) => v.id == widget.videoId);
-      if (index != -1) {
-        _jumpedToInitialVideo = true; // Mark as jumped
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_pageController.hasClients) {
-            _pageController.jumpToPage(index);
-            // Set the active provider so the video plays
-            ref.read(activeShortsIndexProvider.notifier).state = index;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: PageView.builder(
+        controller: _pageController,
+        scrollDirection: Axis.vertical,
+        itemCount: shorts.length + (shortsState.hasMore ? 1 : 0),
+        onPageChanged: (index) {
+          // Update the active index so the player knows when to play/pause
+          ref.read(activeShortsIndexProvider.notifier).state = index;
+
+          // Fetch more when nearing the end
+          if (index >= shorts.length - 2 && shortsState.hasMore) {
+            ref.read(shortsListProvider.notifier).fetchMore();
           }
-        });
-      }
-    }
-
-    // 5. Build the PageView
-    return PageView.builder(
-      controller: _pageController,
-      scrollDirection: Axis.vertical, // <-- THIS WAS THE FIX
-      itemCount: shorts.length + (shortsState.hasMore ? 1 : 0), // Add 1 for loader
-      onPageChanged: (index) {
-        // This provider controls which video is playing
-        ref.read(activeShortsIndexProvider.notifier).state = index;
-
-        // 6. Fetch more shorts when user gets near the end
-        if (index >= shorts.length - 2 && shortsState.hasMore) {
-          ref.read(shortsListProvider.notifier).fetchMore();
-        }
-      },
-      itemBuilder: (context, index) {
-        // 7. Show loader at the end
-        if (index == shorts.length) {
-          return shortsState.isLoadingMore
-              ? const Center(child: CircularProgressIndicator())
-              : const SizedBox();
-        }
-        
-        final video = shorts[index];
-        return ShortsPlayer(
-          video: video,
-          index: index,
-        );
-      },
+        },
+        itemBuilder: (context, index) {
+          // Loader at the end
+          if (index == shorts.length) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          
+          return ShortsPlayer(
+            video: shorts[index],
+            index: index,
+          );
+        },
+      ),
     );
   }
 }

@@ -5,7 +5,6 @@ import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart';
 
-// --- 1. Converted to ConsumerStatefulWidget ---
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -14,7 +13,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  // --- 2. Create Scroll Controllers ---
+  // We still use separate controllers for logic, but the main UI uses CustomScrollView
   final _scrollController = ScrollController();
   final _shortsScrollController = ScrollController();
 
@@ -22,25 +21,23 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
 
-    // --- 3. Add listener for vertical video list ---
+    // 1. Listener for the main vertical scroll (Videos)
     _scrollController.addListener(() {
-      // If we're at the bottom, fetch more
-      if (_scrollController.position.pixels >= 
-          _scrollController.position.maxScrollExtent - 200) { // 200px buffer
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         ref.read(videosListProvider.notifier).fetchMore();
       }
     });
 
-    // --- 4. Add listener for horizontal shorts list ---
+    // 2. Listener for the horizontal scroll (Shorts)
     _shortsScrollController.addListener(() {
       if (_shortsScrollController.position.pixels >=
-          _shortsScrollController.position.maxScrollExtent - 100) { // 100px buffer
+          _shortsScrollController.position.maxScrollExtent - 100) {
         ref.read(shortsListProvider.notifier).fetchMore();
       }
     });
 
-    // --- 5. Fetch initial data (if not already loaded) ---
-    // We run this in a post-frame callback to ensure ref is available
+    // 3. Initial Data Fetch
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(shortsListProvider.notifier).fetchFirstBatch();
       ref.read(videosListProvider.notifier).fetchFirstBatch();
@@ -49,7 +46,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
-    // --- 6. Dispose controllers ---
     _scrollController.dispose();
     _shortsScrollController.dispose();
     super.dispose();
@@ -57,83 +53,103 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // --- 7. Watch the new paginated providers ---
     final shortsState = ref.watch(shortsListProvider);
     final videosState = ref.watch(videosListProvider);
 
-    // Handle initial loading state
-    final isInitialLoading = videosState.items.isEmpty && videosState.isLoadingMore;
-
-    return ListView(
-      controller: _scrollController, // Assign main controller
-      children: [
-        // --- SHORTS SECTION ---
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(
-            'Shorts',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-        ),
-        SizedBox(
-          height: 250, // Constrain the height of the horizontal list
-          child: (shortsState.items.isEmpty && shortsState.isLoadingMore)
-              ? const Center(child: CircularProgressIndicator()) // Initial load
-              : ListView.builder(
-                  controller: _shortsScrollController, // Assign shorts controller
-                  scrollDirection: Axis.horizontal,
-                  itemCount: shortsState.items.length + (shortsState.hasMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    // --- 8. Show loading indicator at the end ---
-                    if (index == shortsState.items.length) {
-                      return shortsState.isLoadingMore
-                          ? const Center(child: CircularProgressIndicator())
-                          : const SizedBox();
-                    }
-                    final short = shortsState.items[index];
-                    return SizedBox(
-                      width: 150,
-                      child: ShortsCard(video: short),
-                    );
-                  },
+    return Scaffold(
+      // Use CustomScrollView for high-performance mixed lists
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // --- 1. Shorts Section (Header) ---
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Shorts',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                 ),
-        ),
-
-        const Divider(height: 32),
-
-        // --- VIDEOS SECTION ---
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(
-            'Videos',
-            style: Theme.of(context).textTheme.headlineSmall,
+                SizedBox(
+                  height: 250,
+                  child: (shortsState.items.isEmpty && shortsState.isLoadingMore)
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          controller: _shortsScrollController,
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          itemCount: shortsState.items.length + (shortsState.hasMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == shortsState.items.length) {
+                              return Center(
+                                child: shortsState.isLoadingMore
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(16.0),
+                                        child: CircularProgressIndicator(),
+                                      )
+                                    : const SizedBox(width: 50),
+                              );
+                            }
+                            return SizedBox(
+                              width: 150,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: ShortsCard(video: shortsState.items[index]),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const Divider(height: 32, thickness: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Text(
+                    'Videos',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        if (isInitialLoading)
-          const Center(child: CircularProgressIndicator())
-        else if (videosState.items.isEmpty)
-          const Center(child: Text('No videos found.'))
-        else
-          // --- 9. Build the videos list ---
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(), // Important inside another ListView
-            itemCount: videosState.items.length + (videosState.hasMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              // --- 10. Show loading indicator at the end ---
-              if (index == videosState.items.length) {
-                return videosState.isLoadingMore
-                    ? const Center(child: CircularProgressIndicator())
-                    : const SizedBox();
-              }
-              final video = videosState.items[index];
-              return VideoCard(video: video);
-            },
-          ),
-        
-        // Add padding at the bottom so we can see the final loader
-        const SizedBox(height: 40),
-      ],
+
+          // --- 2. Videos List (Lazy Loaded Sliver) ---
+          if (videosState.items.isEmpty && videosState.isLoadingMore)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (videosState.items.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Center(child: Text('No videos found.')),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  // Loader at bottom
+                  if (index == videosState.items.length) {
+                    return videosState.isLoadingMore
+                        ? const Padding(
+                            padding: EdgeInsets.all(24.0),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : const SizedBox(height: 80); // Bottom padding
+                  }
+                  
+                  // Video Item
+                  return VideoCard(video: videosState.items[index]);
+                },
+                // Count includes +1 for the loader
+                childCount: videosState.items.length + (videosState.hasMore ? 1 : 0),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

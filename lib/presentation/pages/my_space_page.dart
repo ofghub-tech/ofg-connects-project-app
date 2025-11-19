@@ -29,7 +29,6 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
     super.dispose();
   }
 
-  // --- Show the Edit Profile Bottom Sheet ---
   void _showEditProfileSheet() {
     final user = ref.read(authProvider).user;
     final nameController = TextEditingController(text: user?.name ?? 'Guest');
@@ -70,7 +69,7 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
-                maxLength: 150, // Optional: add a length limit
+                maxLength: 150,
               ),
               const SizedBox(height: 16),
               
@@ -84,14 +83,18 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                           name: nameController.text,
                           bio: bioController.text,
                         );
-                        Navigator.pop(context); // Close sheet
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Profile updated!'), backgroundColor: Colors.green),
-                        );
+                        if (context.mounted) Navigator.pop(context);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Profile updated!'), backgroundColor: Colors.green),
+                          );
+                        }
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                          );
+                        }
                       }
                     }
                   },
@@ -113,95 +116,108 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
     final bio = user?.prefs.data['bio'] as String? ?? '';
 
     return Scaffold(
-      appBar: AppBar(
-        // The title now updates automatically when the user name changes
-        title: Text(ref.watch(authProvider.select((s) => s.user?.name ?? 'My Space'))),
-        elevation: 0,
-      ),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    // --- 1. User Avatar ---
-                    CircleAvatar(
-                      radius: 40,
-                      child: Text(
-                        user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : 'G',
-                        style: const TextStyle(fontSize: 32),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      user?.name ?? 'Guest User',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                    if (!isGuest)
-                      Text(
-                        user?.email ?? '',
-                        style: const TextStyle(fontSize: 15, color: Colors.grey),
-                      ),
-                    
-                    if (bio.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          bio,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                    
-                    // --- 2. User Stats ---
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildStatColumn('Videos', ref.watch(userVideosProvider).asData?.value.length ?? 0),
-                        _buildStatColumn('Followers', ref.watch(followerCountProvider).asData?.value ?? 0),
-                        _buildStatColumn('Following', ref.watch(followingCountProvider).asData?.value ?? 0),
+            SliverAppBar(
+              // 1. Adjusted Height (Removed button space)
+              expandedHeight: 260.0, 
+              pinned: true,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              
+              // 2. Title visibility (Only show when collapsed)
+              title: innerBoxIsScrolled ? Text(user?.name ?? 'My Space') : null,
+              centerTitle: true,
+
+              // 3. NEW POSITION: Edit Button in Actions (Always visible)
+              actions: [
+                if (!isGuest)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit Profile',
+                    onPressed: _showEditProfileSheet,
+                  ),
+                const SizedBox(width: 8),
+              ],
+
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.blueAccent.withOpacity(0.15),
+                        Theme.of(context).scaffoldBackgroundColor,
                       ],
                     ),
-                    const SizedBox(height: 20),
-
-                    // --- 3. Edit Profile Button ---
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: _showEditProfileSheet,
-                        child: const Text('Edit Profile'),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 50), // Status bar spacing
+                      CircleAvatar(
+                        radius: 45,
+                        backgroundColor: Colors.blueAccent,
+                        child: CircleAvatar(
+                          radius: 42,
+                          backgroundColor: Colors.grey[900],
+                          child: Text(
+                            user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : 'G',
+                            style: const TextStyle(fontSize: 36, color: Colors.white),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(
+                        user?.name ?? 'Guest',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      if (bio.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 4),
+                          child: Text(
+                            bio,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildStatItem('Videos', ref.watch(paginatedUserVideosProvider).items.length.toString()),
+                          const SizedBox(width: 24),
+                          _buildStatItem('Followers', '${ref.watch(followerCountProvider).asData?.value ?? 0}'),
+                          const SizedBox(width: 24),
+                          _buildStatItem('Following', '${ref.watch(followingCountProvider).asData?.value ?? 0}'),
+                        ],
+                      ),
+                      // Removed old button from here
+                    ],
+                  ),
                 ),
               ),
-            ),
-            
-            // --- 4. Tab Bar ---
-            SliverPersistentHeader(
-              delegate: _SliverAppBarDelegate(
-                TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(text: 'My Videos'),
-                    Tab(text: 'My Library'),
-                  ],
-                ),
+              bottom: TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.blueAccent,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.grey,
+                tabs: const [
+                  Tab(text: 'My Videos'),
+                  Tab(text: 'Library'),
+                ],
               ),
-              pinned: true,
             ),
           ];
         },
         body: TabBarView(
           controller: _tabController,
           children: [
-            // --- Tab 1: My Videos ---
             _buildMyVideosTab(ref),
-            
-            // --- Tab 2: My Library ---
             _buildMyLibraryTab(),
           ],
         ),
@@ -209,49 +225,57 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
     );
   }
 
-  // --- Stat Column Helper ---
-  Widget _buildStatColumn(String label, int count) {
+  Widget _buildStatItem(String label, String value) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          count.toString(),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, color: Colors.grey),
-        ),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
   }
 
-  // --- My Videos Tab ---
   Widget _buildMyVideosTab(WidgetRef ref) {
-    final userVideosAsync = ref.watch(userVideosProvider);
+    final userVideosState = ref.watch(paginatedUserVideosProvider);
+    final videos = userVideosState.items;
+
+    if (videos.isEmpty && userVideosState.isLoadingMore) {
+      Future.microtask(() => ref.read(paginatedUserVideosProvider.notifier).fetchFirstBatch());
+      return const Center(child: CircularProgressIndicator());
+    }
     
-    return userVideosAsync.when(
-      data: (videos) {
-        if (videos.isEmpty) {
-          return const Center(child: Text('You have not uploaded any videos yet.'));
+    if (videos.isEmpty) {
+       return const Center(child: Text('You have not uploaded any videos yet.'));
+    }
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification scrollInfo) {
+        if (!userVideosState.isLoadingMore &&
+            userVideosState.hasMore &&
+            scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+          ref.read(paginatedUserVideosProvider.notifier).fetchMore();
         }
-        return ListView.builder(
-          padding: const EdgeInsets.only(top: 8), // Add padding for the list
-          itemCount: videos.length,
-          itemBuilder: (context, index) {
-            return VideoCard(video: videos[index]);
-          },
-        );
+        return false;
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(child: Text('Error: $err')),
+      child: ListView.builder(
+        padding: const EdgeInsets.only(top: 8),
+        itemCount: videos.length + (userVideosState.hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == videos.length) {
+            return const Center(child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ));
+          }
+          return VideoCard(video: videos[index]);
+        },
+      ),
     );
   }
 
-  // --- My Library Tab ---
   Widget _buildMyLibraryTab() {
     return ListView(
-      padding: const EdgeInsets.only(top: 8), // Add padding for the list
+      padding: const EdgeInsets.only(top: 8),
       children: [
         _buildMenuTile(context, 'History', Icons.history, '/history'),
         _buildMenuTile(context, 'Liked Videos', Icons.thumb_up_outlined, '/liked'),
@@ -260,10 +284,9 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
     );
   }
 
-  // --- Menu Tile Helper ---
   Widget _buildMenuTile(BuildContext context, String title, IconData icon, String route) {
     return ListTile(
-      leading: Icon(icon),
+      leading: Icon(icon, color: Colors.blueAccent),
       title: Text(title),
       trailing: const Icon(Icons.chevron_right, size: 20),
       onTap: () => context.push(route),
@@ -271,7 +294,6 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
   }
 }
 
-// --- Helper class for the sticky TabBar ---
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
   final TabBar _tabBar;
@@ -284,7 +306,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: Theme.of(context).scaffoldBackgroundColor, // Match scaffold bg
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: _tabBar,
     );
   }

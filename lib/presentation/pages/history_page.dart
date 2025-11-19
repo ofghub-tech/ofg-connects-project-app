@@ -1,81 +1,125 @@
-// lib/presentation/pages/history_page.dart
-import 'package:flutter/material.dart'; // <-- THIS WAS THE FIX
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// We import the new widget
-import 'package:ofgconnects_mobile/presentation/widgets/linked_video_card.dart';
-// We import the provider file
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
+import 'package:ofgconnects_mobile/logic/history_provider.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/animate_in_effect.dart';
 
-// 1. Convert to ConsumerStatefulWidget
 class HistoryPage extends ConsumerStatefulWidget {
-  const HistoryPage({Key? key}) : super(key: key);
+  const HistoryPage({super.key});
 
   @override
   ConsumerState<HistoryPage> createState() => _HistoryPageState();
 }
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
-  final _scrollController = ScrollController();
-
   @override
   void initState() {
     super.initState();
-
-    // 2. Add listener for pagination
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >=
-          _scrollController.position.maxScrollExtent - 200) {
-        // 3. Fetch more history videos
-        ref.read(paginatedHistoryProvider.notifier).fetchMore();
-      }
-    });
-
-    // 4. Fetch initial batch
+    // Fetch history when page mounts
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(paginatedHistoryProvider.notifier).fetchFirstBatch();
+      ref.read(historyProvider.notifier).fetchHistory();
     });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 5. Watch the new paginated provider
-    final historyLinksState = ref.watch(paginatedHistoryProvider);
-    final historyLinks = historyLinksState.items;
-
-    // Handle initial loading
-    final isInitialLoading = historyLinks.isEmpty && historyLinksState.isLoadingMore;
+    final historyState = ref.watch(historyProvider);
+    final groupedData = historyState.groupedHistory;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
-      body: isInitialLoading
-          ? const Center(child: CircularProgressIndicator())
-          : historyLinks.isEmpty
-              ? const Center(child: Text('No videos in your history.'))
-              : ListView.builder(
-                  controller: _scrollController,
-                  itemCount: historyLinks.length + (historyLinksState.hasMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    // 6. Show loading indicator at the end
-                    if (index == historyLinks.length) {
-                      return historyLinksState.isLoadingMore
-                          ? const Center(child: CircularProgressIndicator())
-                          : const SizedBox();
-                    }
-                    
-                    // 7. Use the new LinkedVideoCard
-                    final linkDocument = historyLinks[index];
-                    return LinkedVideoCard(
-                      linkDocument: linkDocument,
-                      videoIdField: 'videoId', // From your appwrite.config.json
-                    );
-                  },
-                ),
+      appBar: AppBar(
+        title: const Text('Watch History'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Theme.of(context).scaffoldBackgroundColor, Colors.black],
+          ),
+        ),
+        child: historyState.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : groupedData.isEmpty
+                ? const Center(child: Text("Your watch history is empty.", style: TextStyle(color: Colors.grey)))
+                : ListView.builder(
+                    padding: const EdgeInsets.only(top: 100, bottom: 20),
+                    itemCount: groupedData.keys.length,
+                    itemBuilder: (context, index) {
+                      final dateKey = groupedData.keys.elementAt(index);
+                      final videos = groupedData[dateKey]!;
+
+                      // Separate Shorts and Normal Videos like your React code
+                      final shorts = videos.where((v) => v.category == 'shorts').toList();
+                      final normalVideos = videos.where((v) => v.category != 'shorts').toList();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                            child: Text(
+                              dateKey,
+                              style: const TextStyle(
+                                fontSize: 20, 
+                                fontWeight: FontWeight.bold, 
+                                color: Colors.white
+                              ),
+                            ),
+                          ),
+
+                          // Shorts Section (Horizontal Scroll)
+                          if (shorts.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(left: 16, bottom: 8),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.bolt, color: Colors.blueAccent, size: 18),
+                                  SizedBox(width: 4),
+                                  Text("Shorts", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              height: 240,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                itemCount: shorts.length,
+                                itemBuilder: (ctx, i) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: SizedBox(
+                                      width: 140,
+                                      child: ShortsCard(video: shorts[i]),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Normal Videos (Vertical List)
+                          if (normalVideos.isNotEmpty)
+                            ...normalVideos.map((video) => 
+                              AnimateInEffect(
+                                index: index, // Simple animation trigger
+                                child: VideoCard(video: video)
+                              )
+                            ).toList(),
+                            
+                          const Divider(color: Colors.white10, height: 30),
+                        ],
+                      );
+                    },
+                  ),
+      ),
     );
   }
 }

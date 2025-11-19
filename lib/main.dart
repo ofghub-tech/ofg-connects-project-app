@@ -14,7 +14,10 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.transparent, // Transparent nav bar on Android
   ));
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Force edge-to-edge
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -43,7 +46,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      // small delay to allow Appwrite SDK / browser redirect to settle
       await Future.delayed(const Duration(milliseconds: 1000));
       if (mounted) ref.read(authProvider.notifier).checkUserStatus();
     }
@@ -56,16 +58,22 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       title: 'OFG Connects',
       debugShowCheckedModeBanner: false,
       
-      // --- THEME CONFIGURATION ---
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F), // Slightly darker than pure black
         primaryColor: Colors.blueAccent,
         
-        // Modern AppBar
+        // --- SMOOTH TRANSITIONS ---
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: ZoomPageTransitionsBuilder(), 
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
+        
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF121212),
+          backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: false,
           titleTextStyle: TextStyle(
@@ -76,40 +84,43 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           ),
         ),
         
-        // Card Styling - FIXED: Using CardThemeData for newer Flutter versions
         cardTheme: CardThemeData( 
           color: const Color(0xFF1E1E1E),
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 8,
+          shadowColor: Colors.black54,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
 
-        // Input Decoration
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFF2C2C2C),
+          fillColor: const Color(0xFF262626),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.blueAccent, width: 1.5),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.redAccent, width: 1),
           ),
         ),
 
-        // Elevated Button Styling
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blueAccent,
             foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            elevation: 4,
+            shadowColor: Colors.blueAccent.withOpacity(0.4),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ),
         
-        // Text Theme
         textTheme: const TextTheme(
           headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
           titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3),

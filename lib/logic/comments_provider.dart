@@ -4,10 +4,9 @@ import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-// Import video provider to refresh view/comment counts
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
+import 'package:ofgconnects_mobile/logic/video_provider.dart'; // Import for video invalidation
 
-// 1. State Class (Defines the data structure)
+// 1. State Class
 class CommentsState {
   final List<Document> comments;
   final bool isLoading;
@@ -36,7 +35,7 @@ class CommentsState {
   }
 }
 
-// 2. Notifier Class (Handles logic)
+// 2. Notifier Class
 class CommentsNotifier extends StateNotifier<CommentsState> {
   CommentsNotifier(this.ref) : super(CommentsState());
   final Ref ref;
@@ -69,7 +68,7 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
     }
   }
 
-  // Load More Comments (Pagination)
+  // Load More Comments
   Future<void> loadMore(String videoId) async {
     if (state.isLoading || !state.hasMore || state.lastId == null) return;
 
@@ -98,7 +97,7 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
     }
   }
 
-  // Post a Comment
+  // Post Comment Function (FIXED)
   Future<void> postComment({required String videoId, required String content, String? parentId}) async {
     final user = ref.read(authProvider).user;
     if (user == null) throw Exception("Login required");
@@ -131,7 +130,6 @@ class CommentsNotifier extends StateNotifier<CommentsState> {
         // Optimistically update local list
         state = state.copyWith(comments: [newComment, ...state.comments]);
 
-        // Update video document counter
         try {
            final videoDoc = await databases.getDocument(
              databaseId: AppwriteClient.databaseId, 

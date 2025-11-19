@@ -19,8 +19,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   final _descriptionController = TextEditingController();
   final _tagsController = TextEditingController(); 
   
-  // --- FIX: Updated Categories to match Web Code ---
-  // Key = UI Label, Value = Backend ID
   final Map<String, String> _categoryMap = {
     'General Video': 'general',
     'Short Video': 'shorts',
@@ -28,7 +26,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     'Kids Video': 'kids',
   };
   
-  late String _selectedCategoryLabel; // Holds the Key (UI Label)
+  late String _selectedCategoryLabel; 
 
   File? _videoFile;
   File? _thumbnailFile;
@@ -37,7 +35,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   @override
   void initState() {
     super.initState();
-    _selectedCategoryLabel = _categoryMap.keys.first; // Default to 'General Video'
+    _selectedCategoryLabel = _categoryMap.keys.first;
   }
 
   @override
@@ -70,18 +68,17 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     if (!_formKey.currentState!.validate()) return;
     if (_videoFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a video file'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please select a video file'), backgroundColor: Colors.redAccent),
       );
       return;
     }
 
-    // Trigger upload with correct backend value
     await ref.read(uploadProvider.notifier).uploadVideo(
       videoFile: _videoFile!,
       thumbnailFile: _thumbnailFile,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      category: _categoryMap[_selectedCategoryLabel]!, // Send 'songs', 'shorts', etc.
+      category: _categoryMap[_selectedCategoryLabel]!,
       tags: _tagsController.text.trim(),
     );
   }
@@ -91,47 +88,64 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     final uploadState = ref.watch(uploadProvider);
 
     ref.listen<UploadState>(uploadProvider, (previous, next) {
-      if (next.error != null) {
+      if (next.error != null && !next.isLoading) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${next.error}'), backgroundColor: Colors.red),
         );
       }
       if (next.successMessage != null && !next.isLoading && next.error == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.successMessage!), backgroundColor: Colors.green),
+          const SnackBar(content: Text("Upload Successful!"), backgroundColor: Colors.green),
         );
         context.go('/home');
       }
     });
 
+    // Full Screen Loading Overlay
     if (uploadState.isLoading) {
       return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 24),
-                Text(
-                  uploadState.successMessage ?? 'Processing...',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+        body: Stack(
+          children: [
+            const Opacity(opacity: 0.3, child: ModalBarrier(dismissible: false, color: Colors.black)),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                margin: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 16),
-                LinearProgressIndicator(value: uploadState.progress, minHeight: 8, borderRadius: BorderRadius.circular(4)),
-                const SizedBox(height: 8),
-                Text('${(uploadState.progress * 100).toStringAsFixed(0)}%', style: const TextStyle(color: Colors.grey)),
-                const SizedBox(height: 24),
-                const Text(
-                  'Compressing and uploading your video.\nPlease do not close the app.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(color: Colors.blueAccent),
+                    const SizedBox(height: 24),
+                    Text(
+                      uploadState.successMessage ?? 'Processing...',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: uploadState.progress, 
+                      minHeight: 6, 
+                      borderRadius: BorderRadius.circular(4),
+                      backgroundColor: Colors.grey[800],
+                      color: Colors.blueAccent,
+                    ),
+                    const SizedBox(height: 8),
+                    Text('${(uploadState.progress * 100).toStringAsFixed(0)}%', style: const TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Please do not close the app.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       );
     }
@@ -149,41 +163,37 @@ class _UploadPageState extends ConsumerState<UploadPage> {
               GestureDetector(
                 onTap: _pickVideo,
                 child: Container(
-                  height: 160,
+                  height: 180,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    border: Border.all(color: Colors.grey[700]!),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFF1E1E1E),
+                    border: Border.all(color: Colors.white12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: _videoFile == null
                       ? const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.cloud_upload_outlined, size: 48, color: Colors.blueAccent),
-                            SizedBox(height: 8),
-                            Text('Tap to select video', style: TextStyle(color: Colors.grey)),
+                            Icon(Icons.video_call_rounded, size: 50, color: Colors.blueAccent),
+                            SizedBox(height: 12),
+                            Text('Select Video', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                            Text('Max size 50MB', style: TextStyle(color: Colors.grey, fontSize: 12)),
                           ],
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.check_circle, size: 48, color: Colors.green),
-                            const SizedBox(height: 8),
+                            const Icon(Icons.check_circle_rounded, size: 50, color: Colors.greenAccent),
+                            const SizedBox(height: 12),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 16.0),
                               child: Text(
                                 _videoFile!.path.split('/').last,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.white),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            TextButton(
-                              onPressed: _pickVideo, 
-                              child: const Text("Change Video")
-                            )
+                            TextButton(onPressed: _pickVideo, child: const Text("Change"))
                           ],
                         ),
                 ),
@@ -191,74 +201,59 @@ class _UploadPageState extends ConsumerState<UploadPage> {
               const SizedBox(height: 24),
 
               // 2. Fields
+              _buildLabel('Title'),
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  prefixIcon: Icon(Icons.title),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v!.isEmpty ? 'Title is required' : null,
+                style: const TextStyle(color: Colors.white),
+                validator: (v) => v!.isEmpty ? 'Required' : null,
+                decoration: _inputDecor('Video Title'),
               ),
               const SizedBox(height: 16),
 
+              _buildLabel('Description'),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  prefixIcon: Icon(Icons.description_outlined),
-                  border: OutlineInputBorder(),
-                ),
+                style: const TextStyle(color: Colors.white),
                 maxLines: 3,
+                decoration: _inputDecor('Tell viewers about your video'),
               ),
               const SizedBox(height: 16),
 
+              _buildLabel('Category'),
               DropdownButtonFormField<String>(
                 value: _selectedCategoryLabel,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  prefixIcon: Icon(Icons.category_outlined),
-                  border: OutlineInputBorder(),
-                ),
+                dropdownColor: const Color(0xFF2C2C2C),
+                style: const TextStyle(color: Colors.white),
+                decoration: _inputDecor('Select Category'),
                 items: _categoryMap.keys.map((label) {
-                  return DropdownMenuItem(
-                    value: label, 
-                    child: Text(label),
-                  );
+                  return DropdownMenuItem(value: label, child: Text(label));
                 }).toList(),
                 onChanged: (val) => setState(() => _selectedCategoryLabel = val!),
               ),
               const SizedBox(height: 16),
 
+              _buildLabel('Tags'),
               TextFormField(
                 controller: _tagsController,
-                decoration: const InputDecoration(
-                  labelText: 'Tags',
-                  hintText: 'e.g. music, vlog, funny',
-                  prefixIcon: Icon(Icons.tag),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v!.isEmpty ? 'Tags are required' : null,
+                style: const TextStyle(color: Colors.white),
+                decoration: _inputDecor('e.g., funny, vlog, music'),
+                validator: (v) => v!.isEmpty ? 'At least one tag required' : null,
               ),
               const SizedBox(height: 24),
 
               // 3. Thumbnail
-              const Text("Thumbnail (Optional)", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
+              _buildLabel('Thumbnail (Optional)'),
               GestureDetector(
                 onTap: _pickThumbnail,
                 child: Container(
                   height: 120,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.grey[900],
+                    color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[800]!),
+                    border: Border.all(color: Colors.white12),
                     image: _thumbnailFile != null
-                        ? DecorationImage(
-                            image: FileImage(_thumbnailFile!),
-                            fit: BoxFit.cover,
-                          )
+                        ? DecorationImage(image: FileImage(_thumbnailFile!), fit: BoxFit.cover)
                         : null,
                   ),
                   child: _thumbnailFile == null
@@ -268,25 +263,11 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                             children: [
                               Icon(Icons.image_outlined, color: Colors.grey),
                               SizedBox(width: 8),
-                              Text('Select Image', style: TextStyle(color: Colors.grey)),
+                              Text('Upload Cover', style: TextStyle(color: Colors.grey)),
                             ],
                           ),
                         )
-                      : Stack(
-                          children: [
-                            Positioned(
-                              right: 4,
-                              top: 4,
-                              child: CircleAvatar(
-                                backgroundColor: Colors.black54,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.white),
-                                  onPressed: () => setState(() => _thumbnailFile = null),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      : null,
                 ),
               ),
               const SizedBox(height: 32),
@@ -294,21 +275,35 @@ class _UploadPageState extends ConsumerState<UploadPage> {
               // 4. Upload Button
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 55,
                 child: ElevatedButton(
                   onPressed: _handleUpload,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Publish Video', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  child: const Text('Publish Video', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 50), // Bottom padding
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
+      child: Text(text, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  InputDecoration _inputDecor(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+      filled: true,
+      fillColor: const Color(0xFF1E1E1E),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.all(16),
     );
   }
 }

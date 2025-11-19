@@ -3,183 +3,58 @@ import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-// --- ADD THIS IMPORT ---
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
-// ---
 
-// Provider just for logic functions, no complex state needed here
 final interactionProvider = Provider((ref) => InteractionLogic(ref));
 
-// --- ADD THIS NEW PROVIDER ---
-// This provider checks if the current video is liked by the user
+// Provider to check if a specific video is liked
 final isLikedProvider = FutureProvider.family<bool, String>((ref, videoId) async {
   final user = ref.watch(authProvider).user;
   if (user == null) return false;
-
-  final logic = ref.watch(interactionProvider);
-  return logic.isVideoLiked(videoId);
+  return ref.watch(interactionProvider).checkIfLiked(videoId);
 });
-// ---
+
+// Provider to check if a video is saved (Watch Later)
+final isSavedProvider = FutureProvider.family<bool, String>((ref, videoId) async {
+  final user = ref.watch(authProvider).user;
+  if (user == null) return false;
+  return ref.watch(interactionProvider).isVideoSaved(videoId);
+});
 
 class InteractionLogic {
   final Ref ref;
+  final Databases _db = AppwriteClient.databases;
+  
   InteractionLogic(this.ref);
 
-  final Databases _db = AppwriteClient.databases;
-
-  // --- REPLICATES: logVideoView function from WatchPage.js ---
-  Future<void> logVideoView(String videoId, int currentViewCount) async {
-    final user = ref.read(authProvider).user;
-    
-    // 1. If no user, we can't track history
-    if (user == null) return;
-
-    try {
-      // 2. Check if user has already seen this video
-      final historyCheck = await _db.listDocuments(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdHistory,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1),
-        ],
-      );
-
-      // 3. If history exists, STOP.
-      if (historyCheck.total > 0) {
-        return;
-      }
-
-      // 4. If NEW view: Create History Record
-      await _db.createDocument(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdHistory,
-        documentId: ID.unique(),
-        data: {
-          'userId': user.$id,
-          'videoId': videoId,
-          // --- THIS IS THE FIX ---
-          'createdAt': DateTime.now().toIso8601String(),
-          // ---
-        },
-        permissions: [
-          Permission.read(Role.user(user.$id)), 
-          Permission.write(Role.user(user.$id))
-        ]
-      );
-
-      // B. Increment View Count on Video Document
-      await _db.updateDocument(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdVideos,
-        documentId: videoId,
-        data: {
-          'view_count': currentViewCount + 1,
-        },
-      );
-      
-    } catch (e) {
-      print("Error logging view: $e");
-    }
-  }
-
-  // --- REPLICATES: handleToggleSave function from WatchPage.js ---
-  Future<bool> toggleWatchLater(String videoId) async {
-    final user = ref.read(authProvider).user;
-    if (user == null) throw Exception("User must be logged in");
-
-    try {
-      // 1. Check if already saved
-      final check = await _db.listDocuments(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdWatchLater,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1),
-        ],
-      );
-
-      if (check.total > 0) {
-        // 2. EXISTS -> DELETE (Unsave)
-        final docId = check.documents.first.$id;
-        await _db.deleteDocument(
-          databaseId: AppwriteClient.databaseId,
-          collectionId: AppwriteClient.collectionIdWatchLater,
-          documentId: docId,
-        );
-        return false; // Not saved anymore
-      } else {
-        // 3. DOES NOT EXIST -> CREATE (Save)
-        await _db.createDocument(
-          databaseId: AppwriteClient.databaseId,
-          collectionId: AppwriteClient.collectionIdWatchLater,
-          documentId: ID.unique(),
-          data: {
-            'userId': user.$id,
-            'videoId': videoId,
-            // --- THIS IS THE FIX ---
-            'createdAt': DateTime.now().toIso8601String(),
-            // ---
-          },
-          permissions: [
-             Permission.read(Role.user(user.$id)), 
-             Permission.write(Role.user(user.$id))
-          ]
-        );
-        return true; // Now saved
-      }
-    } catch (e) {
-      print("Error toggling watch later: $e");
-      rethrow;
-    }
-  }
+  // --- 1. LIKE LOGIC ---
   
-  // --- Helper to check initial save state ---
-  Future<bool> isVideoSaved(String videoId) async {
-     final user = ref.read(authProvider).user;
-     if (user == null) return false;
-     
-     final check = await _db.listDocuments(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdWatchLater,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1),
-        ],
-      );
-      return check.total > 0;
-  }
-
-  // --- 
-  // --- NEW FUNCTIONS FOR LIKING ---
-  // ---
-
-  // Helper to check initial like state
-  Future<bool> isVideoLiked(String videoId) async {
+  Future<bool> checkIfLiked(String videoId) async {
     final user = ref.read(authProvider).user;
     if (user == null) return false;
-
-    final check = await _db.listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdLikes, // Use likes collection
-      queries: [
-        Query.equal('userId', user.$id),
-        Query.equal('videoId', videoId),
-        Query.limit(1),
-      ],
-    );
-    return check.total > 0;
+    try {
+      final response = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdLikes,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1), 
+        ]
+      );
+      return response.total > 0;
+    } catch (e) {
+      return false;
+    }
   }
 
-  // Main function to toggle a like
-  Future<void> toggleLike(String videoId, int currentLikeCount) async {
+  // FIXED: Now only takes videoId. It fetches the real count from DB to avoid UI desync.
+  Future<void> toggleLike(String videoId) async {
     final user = ref.read(authProvider).user;
-    if (user == null) throw Exception("User must be logged in");
+    if (user == null) throw Exception("User not logged in");
 
     try {
+      // A. Check if already liked
       final check = await _db.listDocuments(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdLikes,
@@ -190,30 +65,29 @@ class InteractionLogic {
         ],
       );
 
-      if (check.total > 0) {
-        // --- VIDEO IS LIKED: UNLIKE IT ---
-        final docId = check.documents.first.$id;
+      // B. Get Fresh Video Data
+      final videoDoc = await _db.getDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdVideos,
+        documentId: videoId,
+      );
+      int currentCount = videoDoc.data['likeCount'] ?? 0;
 
-        // 1. Delete the like document
+      if (check.total > 0) {
+        // --- UNLIKE ---
+        final docId = check.documents.first.$id;
         await _db.deleteDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdLikes,
           documentId: docId,
         );
-
-        // 2. Decrement the likeCount in the videos collection
-        await _db.updateDocument(
-          databaseId: AppwriteClient.databaseId,
-          collectionId: AppwriteClient.collectionIdVideos,
-          documentId: videoId,
-          data: {
-            'likeCount': currentLikeCount - 1, // Decrement
-          },
-        );
-      } else {
-        // --- VIDEO IS NOT LIKED: LIKE IT ---
         
-        // 1. Create the like document
+        // Decrement safely
+        final newCount = currentCount > 0 ? currentCount - 1 : 0;
+        await _updateVideoCount(videoId, 'likeCount', newCount);
+
+      } else {
+        // --- LIKE ---
         await _db.createDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdLikes,
@@ -221,36 +95,154 @@ class InteractionLogic {
           data: {
             'userId': user.$id,
             'videoId': videoId,
-            'type': 'video', // Based on your 'likes' table schema
+            'type': 'video',
+            'createdAt': DateTime.now().toIso8601String(),
           },
-           permissions: [
-             Permission.read(Role.user(user.$id)), 
-             Permission.write(Role.user(user.$id))
+          permissions: [
+            Permission.read(Role.any()),
+            Permission.write(Role.user(user.$id)),
           ]
         );
 
-        // 2. Increment the likeCount in the videos collection
-         await _db.updateDocument(
-          databaseId: AppwriteClient.databaseId,
-          collectionId: AppwriteClient.collectionIdVideos,
-          documentId: videoId,
-          data: {
-            'likeCount': currentLikeCount + 1, // Increment
-          },
-        );
+        // Increment
+        await _updateVideoCount(videoId, 'likeCount', currentCount + 1);
       }
-
-      // --- REFRESH PROVIDERS ---
-      // Refresh the button state
-      ref.invalidate(isLikedProvider(videoId));
-      // Refresh the video details (to show new like count)
+      
+      // C. Refresh UI
       ref.invalidate(videoDetailsProvider(videoId));
-      // Refresh the liked videos page in case it's open
-      ref.invalidate(likedVideosProvider);
+      ref.invalidate(isLikedProvider(videoId));
 
     } catch (e) {
-      print("Error toggling like: $e");
+      print("Like Error: $e");
       rethrow;
+    }
+  }
+
+  // --- 2. WATCH LATER / SAVE LOGIC ---
+
+  // FIXED: Renamed to match what WatchPage was looking for
+  Future<bool> isVideoSaved(String videoId) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return false;
+    try {
+      final response = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdWatchLater,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1),
+        ]
+      );
+      return response.total > 0;
+    } catch (_) { return false; }
+  }
+
+  Future<void> toggleWatchLater(String videoId) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    try {
+      final check = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdWatchLater,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1),
+        ],
+      );
+
+      if (check.total > 0) {
+        // Unsave
+        await _db.deleteDocument(
+          databaseId: AppwriteClient.databaseId,
+          collectionId: AppwriteClient.collectionIdWatchLater,
+          documentId: check.documents.first.$id,
+        );
+      } else {
+        // Save
+        await _db.createDocument(
+          databaseId: AppwriteClient.databaseId,
+          collectionId: AppwriteClient.collectionIdWatchLater,
+          documentId: ID.unique(),
+          data: {
+            'userId': user.$id,
+            'videoId': videoId,
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+           permissions: [
+            Permission.read(Role.user(user.$id)),
+            Permission.write(Role.user(user.$id)),
+          ]
+        );
+      }
+      // Force refresh the provider so UI updates
+      ref.invalidate(isSavedProvider(videoId)); 
+    } catch (e) {
+      print("Save Error: $e");
+    }
+  }
+
+  // --- 3. HISTORY LOGIC ---
+  
+  Future<void> logVideoView(String videoId, int currentViews) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    try {
+      final check = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdHistory,
+        queries: [
+          Query.equal('userId', user.$id),
+          Query.equal('videoId', videoId),
+          Query.limit(1)
+        ],
+      );
+
+      if (check.total > 0) {
+        // Update existing view time
+        await _db.updateDocument(
+          databaseId: AppwriteClient.databaseId,
+          collectionId: AppwriteClient.collectionIdHistory,
+          documentId: check.documents.first.$id,
+          data: {'createdAt': DateTime.now().toIso8601String()},
+        );
+      } else {
+        // New View
+        await _db.createDocument(
+          databaseId: AppwriteClient.databaseId,
+          collectionId: AppwriteClient.collectionIdHistory,
+          documentId: ID.unique(),
+          data: {
+            'userId': user.$id,
+            'videoId': videoId,
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+          permissions: [
+            Permission.read(Role.user(user.$id)),
+            Permission.write(Role.user(user.$id)),
+          ]
+        );
+        // Increment View Count
+        await _updateVideoCount(videoId, 'view_count', currentViews + 1);
+      } 
+    } catch (e) {
+      print("History Log Error: $e");
+    }
+  }
+
+  Future<void> _updateVideoCount(String videoId, String field, int value) async {
+    try {
+      await _db.updateDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdVideos,
+        documentId: videoId,
+        data: { field: value },
+      );
+    } catch (e) {
+      print("Failed to update count: $e");
     }
   }
 }

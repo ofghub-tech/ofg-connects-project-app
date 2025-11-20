@@ -32,7 +32,7 @@ class _CreateStatusPageState extends ConsumerState<CreateStatusPage> {
         file: _selectedFile!,
         caption: _captionController.text.trim(),
       );
-      if (mounted) context.pop(); // Go back on success
+      if (mounted) context.pop(); 
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -46,43 +46,90 @@ class _CreateStatusPageState extends ConsumerState<CreateStatusPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text("Create Status")),
-      body: Column(
+      // Ensures keyboard doesn't cover the input
+      resizeToAvoidBottomInset: true, 
+      
+      appBar: AppBar(
+        title: const Text("Create Status"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      
+      body: Stack(
         children: [
-          Expanded(
-            child: _selectedFile == null
-              ? Center(
-                  child: IconButton(
-                    icon: const Icon(Icons.add_a_photo, size: 50, color: Colors.white),
-                    onPressed: _pickImage,
-                  ),
-                )
-              : Image.file(_selectedFile!),
-          ),
+          // 1. Image Preview (Centered)
           if (_selectedFile != null)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: _captionController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: "Add a caption...",
-                  hintStyle: TextStyle(color: Colors.grey),
-                  border: InputBorder.none,
+            Positioned.fill(
+              child: Image.file(
+                _selectedFile!,
+                fit: BoxFit.contain,
+              ),
+            )
+          else
+            Center(
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_a_photo_rounded, size: 40, color: Colors.white70),
+                      SizedBox(height: 8),
+                      Text("Tap to select", style: TextStyle(color: Colors.white54)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // 2. Caption Field (Bottom overlay)
+          if (_selectedFile != null)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 90, 16), // Right padding leaves space for FAB
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                  ),
+                ),
+                child: TextField(
+                  controller: _captionController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: "Add a caption...",
+                    hintStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.1),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
                 ),
               ),
             ),
         ],
       ),
+
+      // 3. SUBMIT BUTTON (Floating at Bottom Right)
       floatingActionButton: _selectedFile != null
-        ? FloatingActionButton(
-            onPressed: _isUploading ? null : _upload,
-            backgroundColor: Colors.blueAccent,
-            child: _isUploading 
-              ? const CircularProgressIndicator(color: Colors.white) 
-              : const Icon(Icons.send, color: Colors.white),
-          )
-        : null,
+          ? FloatingActionButton(
+              onPressed: _isUploading ? null : _upload,
+              backgroundColor: Colors.blueAccent,
+              child: _isUploading 
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.send, color: Colors.white),
+            )
+          : null,
     );
   }
 }

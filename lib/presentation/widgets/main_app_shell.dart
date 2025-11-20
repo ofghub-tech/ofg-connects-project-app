@@ -1,9 +1,9 @@
-// lib/presentation/widgets/main_app_shell.dart
-import 'dart:ui'; // Required for BackdropFilter
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/guest_login_dialog.dart'; // Import Guard
 
 class MainAppShell extends ConsumerWidget {
   final Widget child;
@@ -20,7 +20,12 @@ class MainAppShell extends ConsumerWidget {
     return 0;
   }
 
-  void _onItemTapped(int index, BuildContext context) {
+  void _onItemTapped(int index, BuildContext context, WidgetRef ref) async {
+    // --- GUEST GUARD FOR UPLOAD TAB ---
+    if (index == 2) {
+       if (await checkGuest(context, ref)) return;
+    }
+    
     switch (index) {
       case 0: context.go('/home'); break;
       case 1: context.go('/shorts'); break;
@@ -36,7 +41,7 @@ class MainAppShell extends ConsumerWidget {
       case 'logout': ref.read(authProvider.notifier).logoutUser(); break;
     }
   }
-
+  
   bool _shouldShowAppBar(BuildContext context) {
     final String location = GoRouterState.of(context).uri.toString();
     return location == '/home' || location == '/following';
@@ -47,20 +52,10 @@ class MainAppShell extends ConsumerWidget {
     final selectedIndex = _calculateSelectedIndex(context);
     final user = ref.watch(authProvider).user;
     final bool isGuest = user == null || user.email.isEmpty;
-    final String location = GoRouterState.of(context).uri.path;
-    final bool isOtherRootTab = ['/shorts', '/upload', '/following', '/myspace'].contains(location);
-
-    return PopScope(
-      canPop: !isOtherRootTab, 
-      onPopInvoked: (didPop) {
-        if (didPop) return; 
-        context.go('/home');
-      },
-      child: Scaffold(
-        // --- KEY UX FIX: Allow content to flow behind the nav bar ---
-        extendBody: true, 
-        
-        appBar: _shouldShowAppBar(context) 
+    
+    return Scaffold(
+      extendBody: true,
+      appBar: _shouldShowAppBar(context) 
           ? PreferredSize(
               preferredSize: const Size.fromHeight(60),
               child: AppBar(
@@ -68,7 +63,6 @@ class MainAppShell extends ConsumerWidget {
                 backgroundColor: Colors.transparent, 
                 elevation: 0,
                 scrolledUnderElevation: 0,
-                // Glass effect for AppBar
                 flexibleSpace: ClipRRect(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -80,36 +74,26 @@ class MainAppShell extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.blueAccent,
+                        gradient: const LinearGradient(colors: [Colors.blueAccent, Colors.lightBlueAccent]),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 8)]
                       ),
                       child: const Text(
                         'OFG',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          letterSpacing: 1,
-                        ),
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      'Connects',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
+                    const Text('Connects', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   ],
                 ),
                 actions: [
-                  if (isGuest)
+                   if (isGuest)
                     TextButton(
                       onPressed: () => ref.read(authProvider.notifier).googleLogin(),
-                      child: const Text('Sign Up'),
+                      child: const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   _buildCircleAction(context, Icons.search_rounded, () => context.push('/search')),
-                  const SizedBox(width: 8),
-                  _buildCircleAction(context, Icons.notifications_none_rounded, () {}),
                   const SizedBox(width: 8),
                   PopupMenuButton<String>(
                     offset: const Offset(0, 50),
@@ -140,9 +124,7 @@ class MainAppShell extends ConsumerWidget {
                       child: CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.grey[800],
-                        backgroundImage: (user?.prefs.data['avatar'] != null) 
-                            ? NetworkImage(user!.prefs.data['avatar']) 
-                            : null,
+                        backgroundImage: (user?.prefs.data['avatar'] != null) ? NetworkImage(user!.prefs.data['avatar']) : null,
                         child: (user?.prefs.data['avatar'] == null)
                           ? Text(isGuest ? 'G' : user!.name[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
                           : null,
@@ -153,10 +135,8 @@ class MainAppShell extends ConsumerWidget {
               ),
             )
           : null, 
-
-        body: child,
-        
-        floatingActionButton: selectedIndex == 1 
+      body: child,
+      floatingActionButton: selectedIndex == 1 
           ? null 
           : FloatingActionButton(
               onPressed: () => context.push('/bible'),
@@ -165,58 +145,62 @@ class MainAppShell extends ConsumerWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               child: const Icon(Icons.menu_book_rounded, color: Colors.white),
             ),
-
-        // --- NEW GLASSMORPHIC NAV BAR ---
-        bottomNavigationBar: Container(
-           margin: const EdgeInsets.only(left: 10, right: 10, bottom: 10), // Floating effect
-           child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.75),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: NavigationBar(
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: (index) => _onItemTapped(index, context),
-                  backgroundColor: Colors.transparent,
-                  indicatorColor: Colors.blueAccent.withOpacity(0.25),
-                  labelBehavior: NavigationDestinationLabelBehavior.alwaysHide, // Clean look
-                  height: 65,
-                  destinations: const [
-                     NavigationDestination(
-                      icon: Icon(Icons.home_outlined, color: Colors.white60),
-                      selectedIcon: Icon(Icons.home_rounded, color: Colors.blueAccent),
-                      label: 'Home',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24), 
+        height: 70,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(35),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(35),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              color: const Color(0xFF1E1E1E).withOpacity(0.85),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildNavItem(context, Icons.home_rounded, Icons.home_outlined, 0, selectedIndex, ref),
+                  _buildNavItem(context, Icons.play_arrow_rounded, Icons.play_arrow_outlined, 1, selectedIndex, ref),
+                  GestureDetector(
+                    onTap: () => _onItemTapped(2, context, ref), // Intercepted
+                    child: Container(
+                      width: 50, height: 50,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Colors.blueAccent, Colors.lightBlueAccent]),
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 12, spreadRadius: 2)]
+                      ),
+                      child: const Icon(Icons.add, color: Colors.white, size: 30),
                     ),
-                     NavigationDestination(
-                      icon: Icon(Icons.play_arrow_outlined, color: Colors.white60),
-                      selectedIcon: Icon(Icons.play_arrow_rounded, color: Colors.blueAccent),
-                      label: 'Shorts',
-                    ),
-                     NavigationDestination(
-                      icon: Icon(Icons.add_circle_outline, size: 30, color: Colors.white60),
-                      selectedIcon: Icon(Icons.add_circle, color: Colors.blueAccent, size: 30),
-                      label: 'Upload',
-                    ),
-                     NavigationDestination(
-                      icon: Icon(Icons.people_outline, color: Colors.white60),
-                      selectedIcon: Icon(Icons.people_rounded, color: Colors.blueAccent),
-                      label: 'Following',
-                    ),
-                     NavigationDestination(
-                      icon: Icon(Icons.person_outline, color: Colors.white60),
-                      selectedIcon: Icon(Icons.person_rounded, color: Colors.blueAccent),
-                      label: 'My Space',
-                    ),
-                  ],
-                ),
+                  ),
+                  _buildNavItem(context, Icons.people_rounded, Icons.people_outline, 3, selectedIndex, ref),
+                  _buildNavItem(context, Icons.person_rounded, Icons.person_outline, 4, selectedIndex, ref),
+                ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(BuildContext context, IconData activeIcon, IconData inactiveIcon, int index, int selectedIndex, WidgetRef ref) {
+    final isSelected = index == selectedIndex;
+    return GestureDetector(
+      onTap: () => _onItemTapped(index, context, ref),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        child: Icon(
+          isSelected ? activeIcon : inactiveIcon,
+          color: isSelected ? Colors.white : Colors.white54,
+          size: 28,
         ),
       ),
     );
@@ -228,10 +212,7 @@ class MainAppShell extends ConsumerWidget {
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withOpacity(0.08), 
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.08)),
         child: Icon(icon, size: 22, color: Colors.white),
       ),
     );

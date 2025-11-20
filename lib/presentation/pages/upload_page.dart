@@ -1,10 +1,10 @@
-// lib/presentation/pages/upload_page.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ofgconnects_mobile/logic/upload_provider.dart';
+import 'package:video_compress/video_compress.dart'; 
 
 class UploadPage extends ConsumerStatefulWidget {
   const UploadPage({super.key});
@@ -27,7 +27,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   };
   
   late String _selectedCategoryLabel; 
-
   File? _videoFile;
   File? _thumbnailFile;
   final ImagePicker _picker = ImagePicker();
@@ -73,14 +72,19 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       return;
     }
 
-    await ref.read(uploadProvider.notifier).uploadVideo(
-      videoFile: _videoFile!,
-      thumbnailFile: _thumbnailFile,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      category: _categoryMap[_selectedCategoryLabel]!,
-      tags: _tagsController.text.trim(),
-    );
+    try {
+      await ref.read(uploadProvider.notifier).uploadVideo(
+        videoFile: _videoFile!,
+        thumbnailFile: _thumbnailFile,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        category: _categoryMap[_selectedCategoryLabel]!,
+        tags: _tagsController.text.trim(),
+      );
+    } finally {
+      // ALWAYS Clean up compressed video cache
+      await VideoCompress.deleteAllCache();
+    }
   }
 
   @override
@@ -101,7 +105,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       }
     });
 
-    // Full Screen Loading Overlay
     if (uploadState.isLoading) {
       return Scaffold(
         body: Stack(
@@ -159,7 +162,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Video Selection
               GestureDetector(
                 onTap: _pickVideo,
                 child: Container(
@@ -199,8 +201,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 ),
               ),
               const SizedBox(height: 24),
-
-              // 2. Fields
               _buildLabel('Title'),
               TextFormField(
                 controller: _titleController,
@@ -209,7 +209,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 decoration: _inputDecor('Video Title'),
               ),
               const SizedBox(height: 16),
-
               _buildLabel('Description'),
               TextFormField(
                 controller: _descriptionController,
@@ -218,7 +217,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 decoration: _inputDecor('Tell viewers about your video'),
               ),
               const SizedBox(height: 16),
-
               _buildLabel('Category'),
               DropdownButtonFormField<String>(
                 value: _selectedCategoryLabel,
@@ -231,7 +229,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 onChanged: (val) => setState(() => _selectedCategoryLabel = val!),
               ),
               const SizedBox(height: 16),
-
               _buildLabel('Tags'),
               TextFormField(
                 controller: _tagsController,
@@ -240,8 +237,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 validator: (v) => v!.isEmpty ? 'At least one tag required' : null,
               ),
               const SizedBox(height: 24),
-
-              // 3. Thumbnail
               _buildLabel('Thumbnail (Optional)'),
               GestureDetector(
                 onTap: _pickThumbnail,
@@ -271,8 +266,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 ),
               ),
               const SizedBox(height: 32),
-
-              // 4. Upload Button
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -281,7 +274,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                   child: const Text('Publish Video', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 50), // Bottom padding
+              const SizedBox(height: 50),
             ],
           ),
         ),

@@ -6,9 +6,8 @@ import 'package:ofgconnects_mobile/logic/shorts_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/guest_login_dialog.dart'; // Import
+// REMOVED: guest_login_dialog import
 
-// ... BouncyLikeButton (Same as before) ...
 class BouncyLikeButton extends StatefulWidget {
   final bool isLiked;
   final VoidCallback onTap;
@@ -101,9 +100,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   }
 
   void _toggleLike() async {
-    // --- GUEST GUARD ---
-    if (await checkGuest(context, ref)) return;
-
+    // REMOVED GUEST CHECK
     final isLikedAsync = ref.read(isLikedProvider(widget.video.id));
     final currentStatus = _localIsLiked ?? isLikedAsync.value ?? false;
     setState(() {
@@ -121,17 +118,13 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   }
 
   void _toggleSave() async {
-    // --- GUEST GUARD ---
-    if (await checkGuest(context, ref)) return;
-
+    // REMOVED GUEST CHECK
     await ref.read(interactionProvider).toggleWatchLater(widget.video.id);
     ref.invalidate(isSavedProvider(widget.video.id));
   }
 
   void _showComments(BuildContext context) async {
-    // --- GUEST GUARD ---
-    if (await checkGuest(context, ref)) return;
-
+    // REMOVED GUEST CHECK
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

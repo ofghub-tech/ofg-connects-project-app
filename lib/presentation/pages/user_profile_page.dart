@@ -1,4 +1,3 @@
-// ... (imports) ...
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +6,7 @@ import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/guest_login_dialog.dart'; // Import
+// REMOVED: guest_login_dialog import
 
 class UserProfilePage extends ConsumerStatefulWidget {
   final String userId;
@@ -20,7 +19,6 @@ class UserProfilePage extends ConsumerStatefulWidget {
 }
 
 class _UserProfilePageState extends ConsumerState<UserProfilePage> {
-  // ... (State, ScrollController logic same as before) ...
   final _scrollController = ScrollController();
 
   @override
@@ -94,9 +92,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                           height: 40, 
                           child: ElevatedButton(
                             onPressed: () async {
-                              // --- GUEST GUARD ---
-                              if (await checkGuest(context, ref)) return;
-
+                              // REMOVED GUEST CHECK
                               final notifier = ref.read(subscriptionNotifierProvider.notifier);
                               if (isFollowing) {
                                 notifier.unfollowUser(widget.userId);

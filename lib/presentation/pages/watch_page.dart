@@ -1,4 +1,3 @@
-// ... Imports ...
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
@@ -9,7 +8,7 @@ import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dar
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/guest_login_dialog.dart'; // Import Guard
+// REMOVED: guest_login_dialog import
 
 class WatchPage extends ConsumerStatefulWidget {
   final String videoId; 
@@ -19,7 +18,6 @@ class WatchPage extends ConsumerStatefulWidget {
 }
 
 class _WatchPageState extends ConsumerState<WatchPage> {
-  // ... (Controller logic same as previous response) ...
   VideoPlayerController? _controller;
   bool _isLoading = true;
   String? _errorMessage;
@@ -29,7 +27,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     super.initState();
     _initializePage();
   }
-  // ... (initializePage, dispose logic same)
   
   @override
   void didUpdateWidget(WatchPage oldWidget) {
@@ -42,7 +39,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
   
   Future<void> _initializePage() async {
-     // ... same implementation as before ...
      final currentVideoId = widget.videoId;
     try {
       final video = await ref.read(videoDetailsProvider(widget.videoId).future);
@@ -71,9 +67,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   void dispose() { _disposePlayer(); super.dispose(); }
 
   void _showComments(BuildContext context, String videoId) async {
-    // --- GUEST GUARD ---
-    if (await checkGuest(context, ref)) return;
-
+    // REMOVED: Guest check. Backend handles permissions.
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -185,9 +179,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             return ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: isFollowing ? Colors.grey[800] : Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10), elevation: 0),
               onPressed: () async {
-                // --- GUEST GUARD ---
-                if (await checkGuest(context, ref)) return;
-
+                // REMOVED GUEST CHECK
                 final notifier = ref.read(subscriptionNotifierProvider.notifier);
                 if (isFollowing) notifier.unfollowUser(video.creatorId);
                 else notifier.followUser(video);
@@ -211,7 +203,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         isLikedAsync.when(
           data: (isLiked) => InkWell(
             onTap: () async {
-              if (await checkGuest(context, ref)) return;
+              // REMOVED GUEST CHECK
               ref.read(interactionProvider).toggleLike(video.id);
             },
             borderRadius: BorderRadius.circular(30),
@@ -228,7 +220,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         isSavedAsync.when(
           data: (isSaved) => InkWell(
             onTap: () async {
-               if (await checkGuest(context, ref)) return;
+               // REMOVED GUEST CHECK
                await ref.read(interactionProvider).toggleWatchLater(video.id);
             },
             borderRadius: BorderRadius.circular(30),

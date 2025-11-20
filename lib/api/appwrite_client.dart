@@ -16,6 +16,8 @@ class AppwriteClient {
   static final String? _collectionIdBible = dotenv.env['APPWRITE_COLLECTION_ID_BIBLE'];
   static final String? _collectionIdHistory = dotenv.env['APPWRITE_COLLECTION_ID_HISTORY'];
   static final String? _collectionIdWatchLater = dotenv.env['APPWRITE_COLLECTION_ID_WATCH_LATER'];
+  // --- NEW: Statuses Collection ---
+  static final String? _collectionIdStatuses = dotenv.env['APPWRITE_COLLECTION_ID_STATUSES'];
 
   // --- Initialize Client ---
   static final Client client = _initClient();
@@ -35,6 +37,7 @@ class AppwriteClient {
       'APPWRITE_COLLECTION_ID_BIBLE': _collectionIdBible,
       'APPWRITE_COLLECTION_ID_HISTORY': _collectionIdHistory,
       'APPWRITE_COLLECTION_ID_WATCH_LATER': _collectionIdWatchLater,
+      'APPWRITE_COLLECTION_ID_STATUSES': _collectionIdStatuses, // Added check
     };
 
     final missingVars = envVars.entries
@@ -67,4 +70,5 @@ class AppwriteClient {
   static final String collectionIdBible = _collectionIdBible!;
   static final String collectionIdHistory = _collectionIdHistory!;
   static final String collectionIdWatchLater = _collectionIdWatchLater!;
+  static final String collectionIdStatuses = _collectionIdStatuses!; // Added Export
 }

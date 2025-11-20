@@ -1,4 +1,3 @@
-// lib/presentation/widgets/video_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,13 +14,7 @@ class VideoCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          )
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       clipBehavior: Clip.antiAlias, 
       child: Material(
@@ -43,17 +36,10 @@ class VideoCard extends ConsumerWidget {
                       child: Image.network(
                         video.thumbnailUrl,
                         fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(color: const Color(0xFF2C2C2C));
-                        },
-                        errorBuilder: (_,__,___) => Container(
-                          color: const Color(0xFF2C2C2C),
-                          child: const Icon(Icons.broken_image, color: Colors.white24),
-                        ),
+                        loadingBuilder: (context, child, loadingProgress) => (loadingProgress == null) ? child : Container(color: const Color(0xFF2C2C2C)),
+                        errorBuilder: (_,__,___) => Container(color: const Color(0xFF2C2C2C), child: const Icon(Icons.broken_image, color: Colors.white24)),
                       ),
                     ),
-                    // Gradient for text readability
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
@@ -66,19 +52,12 @@ class VideoCard extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    
-                    // --- REMOVED CENTER PLAY ICON ---
-
-                    // Duration Mockup
                     Positioned(
                       bottom: 10,
                       right: 10,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(6)),
                         child: const Text("VIDEO", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                     ),
@@ -92,18 +71,21 @@ class VideoCard extends ConsumerWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Bordered Avatar
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.blueAccent.withOpacity(0.6), width: 2),
-                      ),
-                      child: CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.grey[800],
-                        child: Text(
-                          video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : 'U',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    // Clickable Avatar
+                    GestureDetector(
+                      onTap: () => context.push('/profile/${video.creatorId}?name=${Uri.encodeComponent(video.creatorName)}'),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.blueAccent.withOpacity(0.6), width: 2),
+                        ),
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.grey[800],
+                          child: Text(
+                            video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : 'U',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                     ),
@@ -116,19 +98,20 @@ class VideoCard extends ConsumerWidget {
                         children: [
                           Text(
                             video.title,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              height: 1.2,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.2, fontWeight: FontWeight.w600),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 6.0),
                           Row(
                             children: [
-                              Text(
-                                video.creatorName,
-                                style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                              // Clickable Name
+                              GestureDetector(
+                                onTap: () => context.push('/profile/${video.creatorId}?name=${Uri.encodeComponent(video.creatorName)}'),
+                                child: Text(
+                                  video.creatorName,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                                ),
                               ),
                               const SizedBox(width: 6),
                               const Icon(Icons.circle, size: 3, color: Colors.grey),
@@ -156,15 +139,5 @@ class VideoCard extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-    if (difference.inDays > 365) return '${(difference.inDays / 365).floor()}y ago';
-    if (difference.inDays > 30) return '${(difference.inDays / 30).floor()}mo ago';
-    if (difference.inDays > 0) return '${difference.inDays}d ago';
-    if (difference.inHours > 0) return '${difference.inHours}h ago';
-    return 'Just now';
   }
 }

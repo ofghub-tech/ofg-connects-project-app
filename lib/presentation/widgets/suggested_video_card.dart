@@ -13,14 +13,14 @@ class SuggestedVideoCard extends ConsumerWidget {
     return InkWell(
       onTap: () {
         // Navigate to the new video
-        context.go('/home/watch/${video.id}');
+        context.push('/home/watch/${video.id}');
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Thumbnail Section (Fixed: Uses Image.network)
+            // 1. Thumbnail Section
             SizedBox(
               width: 160,
               height: 90,
@@ -28,7 +28,6 @@ class SuggestedVideoCard extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   Hero(
-                    // Use a unique tag prefix to avoid conflicts if same video is elsewhere
                     tag: 'suggested_thumbnail_${video.id}',
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -71,10 +70,14 @@ class SuggestedVideoCard extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4.0),
-                  Text(
-                    video.creatorName,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[400],
+                  // --- CLICKABLE NAME ---
+                  GestureDetector(
+                    onTap: () => context.push('/profile/${video.creatorId}?name=${Uri.encodeComponent(video.creatorName)}'),
+                    child: Text(
+                      video.creatorName,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[400],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2.0),

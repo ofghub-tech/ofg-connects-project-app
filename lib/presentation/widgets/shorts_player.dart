@@ -1,13 +1,14 @@
 // lib/presentation/widgets/shorts_player.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart'; // Added import
 import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/logic/shorts_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
 
-// --- ANIMATED LIKE BUTTON ---
+// ... (BouncyLikeButton code remains unchanged) ...
 class BouncyLikeButton extends StatefulWidget {
   final bool isLiked;
   final VoidCallback onTap;
@@ -60,8 +61,8 @@ class _BouncyLikeButtonState extends State<BouncyLikeButton> with SingleTickerPr
     );
   }
 }
+// ...
 
-// --- MAIN SHORTS PLAYER ---
 class ShortsPlayer extends ConsumerStatefulWidget {
   final Video video;
   final int index;
@@ -73,12 +74,11 @@ class ShortsPlayer extends ConsumerStatefulWidget {
 }
 
 class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
+  // ... (State variables and methods: _controller, _initializePlayer, _playAndLog, _toggleLike, _toggleSave, _showComments remain unchanged) ...
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isBuffering = true;
   bool _hasLoggedView = false;
-
-  // Optimistic State for Likes
   late int _localLikeCount;
   bool? _localIsLiked;
 
@@ -114,7 +114,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
           _isBuffering = false; 
         });
         
-        // Auto-play if this is the active slide
         if (ref.read(activeShortsIndexProvider) == widget.index) {
           _playAndLog();
         }
@@ -125,36 +124,25 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     }
   }
 
-  // Helper to ensure we log only once per session
   void _playAndLog() {
     if (_controller == null || !_controller!.value.isInitialized) return;
-    
     _controller!.play();
-    
-    // FIXED: Log view only once
     if (!_hasLoggedView) {
       _hasLoggedView = true;
-      // FIXED: No second argument
       ref.read(interactionProvider).logVideoView(widget.video.id);
     }
   }
 
   void _toggleLike() async {
-    // 1. Get current status
     final isLikedAsync = ref.read(isLikedProvider(widget.video.id));
     final currentStatus = _localIsLiked ?? isLikedAsync.value ?? false;
-
-    // 2. Optimistic Update (Instant Feedback)
     setState(() {
       _localIsLiked = !currentStatus;
       _localLikeCount += _localIsLiked! ? 1 : -1;
     });
-
-    // 3. API Call
     try {
       await ref.read(interactionProvider).toggleLike(widget.video.id);
     } catch (e) {
-      // Revert on error
       setState(() {
         _localIsLiked = currentStatus;
         _localLikeCount -= _localIsLiked! ? 1 : -1;
@@ -189,7 +177,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to index changes to auto play/pause
+    // ... (build method remains the same until _buildBottomInfo)
     ref.listen<int>(activeShortsIndexProvider, (prev, next) {
       if (next == widget.index) {
         _playAndLog();
@@ -201,15 +189,12 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. Video Layer & Tap to Pause/Play
         GestureDetector(
           onTap: () {
             if (_controller != null && _controller!.value.isInitialized) {
                if (_controller!.value.isPlaying) {
                  _controller!.pause();
                } else {
-                 // FIXED: Use _playAndLog instead of just .play() 
-                 // This ensures manual plays also count towards history
                  _playAndLog();
                }
                setState(() {}); 
@@ -233,12 +218,8 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
             ),
           ),
         ),
-
-        // 2. Loading / Buffering Indicator
         if (!_isInitialized || _isBuffering)
           const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)),
-          
-        // 3. Pause Icon Overlay
         if (_isInitialized && !_controller!.value.isPlaying && !_isBuffering)
           Center(
             child: IgnorePointer(
@@ -249,18 +230,14 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
               ),
             ),
           ),
-
-        // 4. Gradient Overlay (Bottom shadow)
         _buildGradientOverlay(),
-        
-        // 5. Interaction Buttons (Right Side)
         _buildRightSideActions(context),
-        
-        // 6. Info (Bottom Left)
-        _buildBottomInfo(),
+        _buildBottomInfo(), // Calls the updated method
       ],
     );
   }
+
+  // ... (Helper widgets)
 
   Widget _buildGradientOverlay() {
     return Positioned(
@@ -283,16 +260,14 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   Widget _buildRightSideActions(BuildContext context) {
      return Positioned(
           right: 8,
-          bottom: 200, // Raised to clear Bottom Nav Bar
+          bottom: 200,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-               // Like Button
                Consumer(
                 builder: (context, ref, child) {
                    final isLikedAsync = ref.watch(isLikedProvider(widget.video.id));
                    final isLiked = _localIsLiked ?? isLikedAsync.value ?? false;
-                   
                    return Column(
                      children: [
                        BouncyLikeButton(
@@ -309,21 +284,16 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                 },
                ),
               const SizedBox(height: 20),
-              
-              // Comments Button
               _buildActionButton(
                 icon: Icons.comment_rounded,
                 label: 'Comment',
                 onTap: () => _showComments(context),
               ),
               const SizedBox(height: 20),
-              
-              // Save (Watch Later) Button
               Consumer(
                 builder: (context, ref, child) {
                    final isSavedAsync = ref.watch(isSavedProvider(widget.video.id));
                    final isSaved = isSavedAsync.value ?? false;
-                   
                    return _buildActionButton(
                      icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
                      label: 'Save',
@@ -333,24 +303,27 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                 }
               ),
               const SizedBox(height: 20),
-
-              // Share Button
                _buildActionButton(icon: Icons.share_rounded, label: 'Share', onTap: () {}),
             ],
           ),
         );
   }
 
+  // --- UPDATED METHOD TO MAKE PROFILE CLICKABLE ---
   Widget _buildBottomInfo() {
       return Positioned(
-          bottom: 130, // Raised to sit above Nav Bar
+          bottom: 130,
           left: 16, 
           right: 80,
-          child: IgnorePointer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () {
+                   context.push('/profile/${widget.video.creatorId}?name=${Uri.encodeComponent(widget.video.creatorName)}');
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1)),
@@ -367,15 +340,15 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  widget.video.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                widget.video.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ],
           ),
         );
   }

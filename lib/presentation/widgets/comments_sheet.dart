@@ -2,11 +2,11 @@
 import 'package:appwrite/models.dart' as models;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// --- THIS IMPORT WAS MISSING OR INCORRECT ---
+import 'package:go_router/go_router.dart'; // Added import
 import 'package:ofgconnects_mobile/logic/comments_provider.dart'; 
-// --------------------------------------------
 
-// Shared provider to track who we are replying to
+// ... (relying on existing providers, only updating CommentTile widget) ...
+
 final replyingToCommentProvider = StateProvider<models.Document?>((ref) => null);
 
 class CommentsSheet extends ConsumerStatefulWidget {
@@ -24,6 +24,7 @@ class CommentsSheet extends ConsumerStatefulWidget {
 }
 
 class _CommentsSheetState extends ConsumerState<CommentsSheet> {
+  // ... (State methods: _postComment, etc. remain unchanged) ...
   final TextEditingController _commentController = TextEditingController();
   bool _isPosting = false;
 
@@ -44,9 +45,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
   Future<void> _postComment() async {
     if (_commentController.text.trim().isEmpty) return;
-    
     final replyingTo = ref.read(replyingToCommentProvider);
-
     setState(() => _isPosting = true);
     try {
       await ref.read(commentsProvider.notifier).postComment(
@@ -129,7 +128,6 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                     ),
           ),
 
-          // Input Area
           Container(
             padding: EdgeInsets.only(
               left: 16, 
@@ -216,6 +214,7 @@ class _CommentTileState extends ConsumerState<CommentTile> {
     final data = widget.comment.data;
     final username = data['username'] ?? 'Unknown';
     final content = data['content'] ?? '';
+    final userId = data['userId']; // Extract userId
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
@@ -225,12 +224,20 @@ class _CommentTileState extends ConsumerState<CommentTile> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: Colors.grey[800],
-                child: Text(
-                  username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              // --- CLICKABLE AVATAR ---
+              GestureDetector(
+                onTap: () {
+                  if (userId != null) {
+                    context.push('/profile/$userId?name=${Uri.encodeComponent(username)}');
+                  }
+                },
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey[800],
+                  child: Text(
+                    username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -238,9 +245,17 @@ class _CommentTileState extends ConsumerState<CommentTile> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      username,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                    // --- CLICKABLE USERNAME ---
+                    GestureDetector(
+                      onTap: () {
+                         if (userId != null) {
+                            context.push('/profile/$userId?name=${Uri.encodeComponent(username)}');
+                         }
+                      },
+                      child: Text(
+                        username,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -284,7 +299,6 @@ class _CommentTileState extends ConsumerState<CommentTile> {
                 if (_showReplies)
                   Consumer(
                     builder: (context, ref, child) {
-                      // This works now because we imported comments_provider.dart
                       final repliesAsync = ref.watch(repliesProvider(widget.comment.$id));
                       return repliesAsync.when(
                         data: (replies) => Column(

@@ -1,4 +1,3 @@
-// lib/logic/video_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,20 +38,20 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
   final int _limit = 10; 
   String? _lastId;
 
-  Future<List<Document>> _fetchPage(List<String> queries);
-  T _fromDocument(Document doc);
+  // PUBLIC METHODS (Changed from private so they can be overridden)
+  Future<List<Document>> fetchPage(List<String> queries);
+  T fromDocument(Document doc);
 
   Future<void> fetchFirstBatch() async {
-    // If we already have items, don't re-fetch automatically unless forced
     if (state.items.isNotEmpty) return;
 
     state = state.copyWith(isLoadingMore: true, hasMore: true);
     _lastId = null; 
 
     try {
-      final documents = await _fetchPage([Query.limit(_limit)]);
+      final documents = await fetchPage([Query.limit(_limit)]);
       
-      final newItems = documents.map(_fromDocument).toList();
+      final newItems = documents.map(fromDocument).toList();
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
 
       state = state.copyWith(
@@ -74,12 +73,12 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
     state = state.copyWith(isLoadingMore: true);
 
     try {
-      final documents = await _fetchPage([
+      final documents = await fetchPage([
         Query.limit(_limit),
         Query.cursorAfter(_lastId!), 
       ]);
 
-      final newItems = documents.map(_fromDocument).toList();
+      final newItems = documents.map(fromDocument).toList();
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
 
       state = state.copyWith(
@@ -103,9 +102,8 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
   ShortsListNotifier(super.ref);
 
   @override
-  Video _fromDocument(Document doc) => Video.fromAppwrite(doc);
+  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
 
-  // Deep Link Initialization
   Future<void> init(String? startWithVideoId) async {
     if (state.items.isNotEmpty) return;
 
@@ -135,7 +133,7 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
   }
 
   @override
-  Future<List<Document>> _fetchPage(List<String> queries) async {
+  Future<List<Document>> fetchPage(List<String> queries) async {
     final response = await ref.read(databasesProvider).listDocuments(
       databaseId: AppwriteClient.databaseId,
       collectionId: AppwriteClient.collectionIdVideos,
@@ -160,10 +158,10 @@ class VideosListNotifier extends PaginatedListNotifier<Video> {
   }
 
   @override
-  Video _fromDocument(Document doc) => Video.fromAppwrite(doc);
+  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
 
   @override
-  Future<List<Document>> _fetchPage(List<String> queries) async {
+  Future<List<Document>> fetchPage(List<String> queries) async {
     final response = await ref.read(databasesProvider).listDocuments(
       databaseId: AppwriteClient.databaseId,
       collectionId: AppwriteClient.collectionIdVideos,
@@ -181,15 +179,15 @@ final videosListProvider = StateNotifierProvider<VideosListNotifier, PaginationS
   return VideosListNotifier(ref);
 });
 
-// C. USER VIDEOS NOTIFIER (My Space)
+// C. USER VIDEOS NOTIFIER (My Space - Current User)
 class UserVideosNotifier extends PaginatedListNotifier<Video> {
   UserVideosNotifier(super.ref);
 
   @override
-  Video _fromDocument(Document doc) => Video.fromAppwrite(doc);
+  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
 
   @override
-  Future<List<Document>> _fetchPage(List<String> queries) async {
+  Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
 
@@ -211,7 +209,6 @@ final paginatedUserVideosProvider = StateNotifierProvider<UserVideosNotifier, Pa
 });
 
 // D. LINK NOTIFIERS (Likes, History, Watch Later)
-// This handles lists that are just links to videos (userId + videoId)
 class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   PaginatedLinkNotifier(super.ref, {required this.collectionId}) {
     fetchFirstBatch();
@@ -220,20 +217,19 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   final String collectionId;
 
   @override
-  Document _fromDocument(Document doc) => doc;
+  Document fromDocument(Document doc) => doc;
 
   @override
-  Future<List<Document>> _fetchPage(List<String> queries) async {
+  Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
 
-    // Ensure we sort by the system attribute $createdAt
     final response = await ref.read(databasesProvider).listDocuments(
       databaseId: AppwriteClient.databaseId,
       collectionId: collectionId,
       queries: [
         Query.equal('userId', user.$id),
-        Query.orderDesc('\$createdAt'), // Corrected to use system attribute
+        Query.orderDesc('\$createdAt'), 
         ...queries,
       ],
     );
@@ -241,17 +237,14 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   }
 }
 
-// Used for Liked Videos Page
 final paginatedLikedVideosProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) {
   return PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdLikes);
 });
 
-// Used for generic history lists (if needed)
 final paginatedHistoryProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) {
   return PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdHistory);
 });
 
-// Used for Watch Later Page
 final paginatedWatchLaterProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) {
   return PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdWatchLater);
 });
@@ -276,7 +269,7 @@ class PaginatedFollowingNotifier extends PaginatedListNotifier<Video> {
         collectionId: AppwriteClient.collectionIdSubscriptions,
         queries: [
           Query.equal('followerId', currentUserId),
-          Query.limit(100) // Fetch first 100 followed users
+          Query.limit(100)
         ],
       );
       
@@ -292,14 +285,13 @@ class PaginatedFollowingNotifier extends PaginatedListNotifier<Video> {
   }
 
   @override
-  Video _fromDocument(Document doc) => Video.fromAppwrite(doc);
+  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
 
   @override
-  Future<List<Document>> _fetchPage(List<String> queries) async {
+  Future<List<Document>> fetchPage(List<String> queries) async {
     final followingIds = await _getFollowingIds();
     if (followingIds.isEmpty) return [];
 
-    // Appwrite limits query length, so we slice if too many followed users
     final safeIds = followingIds.length > 100 
         ? followingIds.sublist(0, 100) 
         : followingIds;
@@ -347,9 +339,7 @@ final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref,
   return allVideos.where((v) => v.id != currentVideoId).toList();
 });
 
-// Deprecated Providers (Returning empty lists safely)
-// These are kept to avoid errors if any old UI code still imports them, 
-// but they effectively do nothing now.
+// Deprecated
 final userVideosProvider = FutureProvider<List<Video>>((ref) async => []);
 final likedVideosProvider = FutureProvider<List<Video>>((ref) async => []);
 final watchLaterProvider = FutureProvider<List<Video>>((ref) async => []);

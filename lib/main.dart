@@ -3,21 +3,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart';
+// Ensure this path matches where you put the file below
+import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart'; 
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
   
-  // Make status bar transparent for immersive feel
+  // 1. Load Env (Safe Mode)
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print("Warning: .env file not found. Ensure it exists in assets.");
+  }
+  
+  // 2. Lock Orientation (Best for video apps, let the player handle landscape)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // 3. Immersive UI
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Colors.transparent, // Transparent nav bar on Android
+    systemNavigationBarColor: Colors.transparent,
   ));
-
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // Force edge-to-edge
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -46,6 +58,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
+      // Good logic: refresh session on app resume
       await Future.delayed(const Duration(milliseconds: 1000));
       if (mounted) ref.read(authProvider.notifier).checkUserStatus();
     }
@@ -53,15 +66,18 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // CRITICAL FIX: Watch the router provider so redirects work
+    final goRouter = ref.watch(routerProvider);
+
     return MaterialApp.router(
-      routerConfig: router,
+      routerConfig: goRouter, // Use the watched provider
       title: 'OFG Connects',
       debugShowCheckedModeBanner: false,
       
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F0F0F), // Slightly darker than pure black
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F),
         primaryColor: Colors.blueAccent,
         
         // --- SMOOTH TRANSITIONS ---

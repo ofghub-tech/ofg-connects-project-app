@@ -1,48 +1,49 @@
 name: ofgconnects_mobile
 description: "A Christian Social app."
-publish_to: 'none' 
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '^3.9.0'
-  # The 'flutter: ">=1.17.0"' line is older and redundant with the 
-  # 'sdk: flutter' dependency, so I removed it for clarity.
+  sdk: '>=3.0.0 <4.0.0' # Updated to be safe for modern Flutter
 
 dependencies:
   flutter:
     sdk: flutter
-  image_picker: ^1.2.1 # Add this line
-  image_cropper: ^8.0.2 # Add this line
-  flutter_cache_manager: ^3.4.1 # Add this line
-  video_compress: ^3.1.2  # Add this
 
-# 1. Backend
-  appwrite: ^20.3.0
+  # --- 1. BACKEND & NETWORK ---
+  appwrite: ^13.0.0        # Updated to latest stable Flutter SDK
+  minio: ^3.5.8            # For Cloudflare R2 Uploads
+  flutter_dotenv: ^5.1.0   # To load .env keys
 
-# 2. State Management
-  flutter_riverpod: ^2.6.1
+  # --- 2. STATE MANAGEMENT ---
+  flutter_riverpod: ^2.5.1
 
-# 3. Navigation
-  go_router: ^14.8.1
-  video_player: ^2.10.1 # Or latest version
-  path_provider: ^2.1.5 # Or latest version
+  # --- 3. NAVIGATION ---
+  go_router: ^14.0.0
 
-# Other
-  cupertino_icons: ^1.0.6
-  flutter_dotenv: ^6.0.0
+  # --- 4. MEDIA & UPLOAD ---
+  image_picker: ^1.1.1     # Selecting video/images
+  image_cropper: ^6.0.0    # If you crop thumbnails
+  flutter_cache_manager: ^3.3.2
+  path: ^1.9.0             # Helper for filenames
+
+  # --- 5. VIDEO PLAYER (For WatchPage) ---
+  video_player: ^2.8.6     # Base player
+  chewie: ^1.8.1           # UI Controls for Video Player
   
-# --- FIX: Removed the 'http' package as it's no longer needed ---
+  # --- 6. UTILITIES ---
+  intl: ^0.19.0            # For formatting "1.2K views"
+  share_plus: ^10.0.0       # For the Share button functionality
+  cupertino_icons: ^1.0.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
 
-# This is the main flutter configuration section.
-# The 'assets' section must go inside here.
 flutter:
   uses-material-design: true
 
-  # <-- THIS IS THE CORRECT LOCATION FOR ASSETS
+  # Ensure your .env file is actually created at the root of your project
   assets:
     - .env

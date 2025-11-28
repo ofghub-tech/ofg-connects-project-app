@@ -1,31 +1,145 @@
-// lib/logic/upload_provider.dart
 import 'dart:io';
+import 'dart:async'; // Required for Completer/Cancel
+import 'dart:typed_data';
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:video_compress/video_compress.dart';
 import 'package:path/path.dart' as p;
+import 'package:minio/minio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+// --- STATE CLASS ---
 class UploadState {
   final bool isLoading;
-  final double progress;
+  final double progress; // 0.0 to 100.0
   final String? error;
   final String? successMessage;
+  final bool isCancelling;
 
   UploadState({
     this.isLoading = false,
     this.progress = 0.0,
     this.error,
     this.successMessage,
+    this.isCancelling = false,
   });
 }
 
+// --- NOTIFIER CLASS ---
 class UploadNotifier extends StateNotifier<UploadState> {
   UploadNotifier(this.ref) : super(UploadState());
   
   final Ref ref;
+  
+  // Track keys for cleanup if upload fails or is cancelled
+  String? _currentBucket;
+  String? _currentKey;
+  bool _cancelRequested = false;
 
+  // --- R2 CONFIG ---
+  Minio _getR2Client() {
+    final endpoint = dotenv.env['R2_ENDPOINT']!.replaceAll('https://', '');
+    return Minio(
+      endPoint: endpoint,
+      accessKey: dotenv.env['R2_ACCESS_KEY_ID']!,
+      secretKey: dotenv.env['R2_SECRET_ACCESS_KEY']!,
+      region: 'auto',
+      useSSL: true, 
+    );
+  }
+
+  // --- 1. SANITIZE FILENAME (Matches Web Logic) ---
+  String _sanitizeFilename(String filename) {
+    // Replaces non-alphanumeric (except . and -) with _
+    return filename.replaceAll(RegExp(r'[^a-zA-Z0-9\.\-]'), '_');
+  }
+
+  // --- 2. UPLOAD HELPER ---
+  Future<String> _uploadToR2({
+    required Minio minio,
+    required File file,
+    required String bucketName,
+    required String domainUrl,
+    required String fileId,
+    required bool isVideo,
+  }) async {
+    if (_cancelRequested) throw Exception("Upload Cancelled by User");
+
+    final rawFilename = p.basename(file.path);
+    final cleanName = _sanitizeFilename(rawFilename);
+    final objectKey = '${fileId}_$cleanName';
+
+    // Store for cleanup
+    _currentBucket = bucketName;
+    _currentKey = objectKey;
+
+    // HTTPS Safety
+    String finalDomain = domainUrl;
+    if (!finalDomain.startsWith('http')) {
+      finalDomain = 'https://$finalDomain';
+    }
+
+    final fileSize = await file.length();
+    final stream = file.openRead().map((chunk) => Uint8List.fromList(chunk));
+
+    await minio.putObject(
+      bucketName,
+      objectKey,
+      stream,
+      size: fileSize,
+      onProgress: (bytes) {
+        if (_cancelRequested) return; // Stop updating if cancelled
+
+        if (isVideo) {
+          // Calculate percentage exactly like Web: (loaded / total) * 100
+          double percent = (bytes / fileSize) * 100;
+          state = UploadState(
+            isLoading: true,
+            progress: percent,
+            successMessage: "Uploading... ${percent.toInt()}%"
+          );
+        }
+      },
+    );
+
+    if (_cancelRequested) throw Exception("Upload Cancelled by User");
+
+    return '$finalDomain/$objectKey';
+  }
+
+  // --- 3. CLEANUP HELPER ---
+  Future<void> _deleteFromR2(String bucket, String key) async {
+    try {
+      final minio = _getR2Client();
+      print("Cleaning up file: $key from $bucket");
+      await minio.removeObject(bucket, key);
+    } catch (e) {
+      print("Failed to cleanup R2 file: $e");
+    }
+  }
+
+  // --- 4. EXTRACT KEY HELPER ---
+  String? _getKeyFromUrl(String url) {
+    try {
+      return url.split('/').last;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // --- PUBLIC: CANCEL UPLOAD ---
+  Future<void> cancelUpload() async {
+    if (!state.isLoading) return;
+
+    _cancelRequested = true;
+    state = UploadState(isLoading: true, isCancelling: true, error: "Cancelling...");
+    
+    // The loop in uploadVideo will catch the exception and trigger cleanup
+    // We strictly handle the cleanup in the catch block below.
+  }
+
+  // --- MAIN: UPLOAD VIDEO ---
   Future<void> uploadVideo({
     required File videoFile,
     required File? thumbnailFile,
@@ -34,124 +148,84 @@ class UploadNotifier extends StateNotifier<UploadState> {
     required String category,
     required String tags,
   }) async {
+    _cancelRequested = false; // Reset cancel flag
     final user = ref.read(authProvider).user;
+    
     if (user == null) {
       state = UploadState(error: "You must be logged in to upload.");
       return;
     }
 
-    state = UploadState(isLoading: true, progress: 0.0, successMessage: "Preparing...");
+    // Validation (Matches Web 5GB limit)
+    const MAX_SIZE = 5 * 1024 * 1024 * 1024; 
+    if (await videoFile.length() > MAX_SIZE) {
+      state = UploadState(error: "Video too large (Max 5GB).");
+      return;
+    }
 
-    String? videoId;
-    String? thumbnailId;
-    Subscription? subscription;
+    state = UploadState(isLoading: true, progress: 0.0, successMessage: "Starting Upload...");
+
+    String? uploadedVideoUrl;
+    String? uploadedThumbUrl;
+    final minio = _getR2Client();
 
     try {
-      final storage = AppwriteClient.storage;
-      final databases = AppwriteClient.databases;
+      final uniqueId = ID.unique();
 
-      // --- 1. COMPRESSION LOGIC ---
-      File fileToUpload = videoFile;
-      
-      try {
-        state = UploadState(isLoading: true, progress: 0.05, successMessage: "Compressing video...");
-        
-        subscription = VideoCompress.compressProgress$.subscribe((progress) {
-           state = UploadState(
-             isLoading: true, 
-             progress: (progress / 100) * 0.3, // First 30% is compression
-             successMessage: "Compressing... ${progress.toInt()}%"
-           );
-        });
-
-        final MediaInfo? mediaInfo = await VideoCompress.compressVideo(
-          videoFile.path,
-          quality: VideoQuality.MediumQuality, 
-          deleteOrigin: false,
-        );
-
-        if (mediaInfo != null && mediaInfo.file != null) {
-          fileToUpload = mediaInfo.file!;
-        }
-      } catch (e) {
-        print("Compression failed, uploading original file: $e");
-        // Fallback to original file if compression fails
-      }
-
-      // --- 2. UPLOAD VIDEO ---
-      state = UploadState(isLoading: true, progress: 0.3, successMessage: "Uploading Video...");
-
-      videoId = ID.unique();
-      final String videoFileName = 'video_${DateTime.now().millisecondsSinceEpoch}${p.extension(fileToUpload.path)}';
-
-      await storage.createFile(
-        bucketId: AppwriteClient.bucketIdVideos,
-        fileId: videoId,
-        // Explicitly provide filename for correct mime-type detection
-        file: InputFile.fromPath(
-          path: fileToUpload.path, 
-          filename: videoFileName
-        ),
-        permissions: [Permission.read(Role.any())],
-        onProgress: (uploadProgress) {
-          // Map upload (0-100) to progress range (0.3 - 0.9)
-          final percent = 0.3 + ((uploadProgress.progress / 100) * 0.6);
-          state = UploadState(
-            isLoading: true, 
-            progress: percent, 
-            successMessage: "Uploading... ${uploadProgress.progress.toInt()}%"
-          );
-        },
+      // --- STEP 1: UPLOAD VIDEO (Temp Bucket) ---
+      // No compression, just like Web
+      uploadedVideoUrl = await _uploadToR2(
+        minio: minio,
+        file: videoFile,
+        bucketName: dotenv.env['R2_TEMP_BUCKET_NAME']!,
+        domainUrl: dotenv.env['R2_PUBLIC_DOMAIN']!,
+        fileId: uniqueId,
+        isVideo: true
       );
 
-      final videoUrlPath = storage.getFileView(
-        bucketId: AppwriteClient.bucketIdVideos,
-        fileId: videoId,
-      ).toString();
-
-      // --- 3. UPLOAD THUMBNAIL ---
-      String? thumbnailUrlPath;
-      if (thumbnailFile != null) {
-        state = UploadState(isLoading: true, progress: 0.92, successMessage: "Uploading Thumbnail...");
-        thumbnailId = ID.unique();
-        final String thumbFileName = 'thumb_${DateTime.now().millisecondsSinceEpoch}${p.extension(thumbnailFile.path)}';
-
-        await storage.createFile(
-          bucketId: AppwriteClient.bucketIdVideos,
-          fileId: thumbnailId,
-          file: InputFile.fromPath(
-            path: thumbnailFile.path, 
-            filename: thumbFileName
-          ),
-          permissions: [Permission.read(Role.any())],
-        );
+      // --- STEP 2: UPLOAD THUMBNAIL (Main Bucket) ---
+      if (thumbnailFile != null && !_cancelRequested) {
+        state = UploadState(isLoading: true, progress: 100, successMessage: "Uploading Thumbnail...");
         
-        thumbnailUrlPath = storage.getFileView(
-          bucketId: AppwriteClient.bucketIdVideos,
-          fileId: thumbnailId,
-        ).toString();
+        uploadedThumbUrl = await _uploadToR2(
+          minio: minio,
+          file: thumbnailFile,
+          bucketName: dotenv.env['R2_BUCKET_ID']!,
+          domainUrl: dotenv.env['R2_MAIN_DOMAIN']!,
+          fileId: '${uniqueId}_thumb',
+          isVideo: false
+        );
       }
 
-      // --- 4. CREATE DATABASE DOCUMENT ---
-      state = UploadState(isLoading: true, progress: 0.98, successMessage: "Finalizing...");
+      // --- STEP 3: CREATE DB DOCUMENT ---
+      if (_cancelRequested) throw Exception("Upload Cancelled");
+
+      state = UploadState(isLoading: true, progress: 100, successMessage: "Finalizing...");
+
+      final videoKey = _getKeyFromUrl(uploadedVideoUrl!);
+      final databases = AppwriteClient.databases;
 
       await databases.createDocument(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdVideos,
-        documentId: videoId, // Use video file ID as doc ID
+        documentId: uniqueId,
+        // Matches Web Code Data Structure Exactly
         data: {
           'title': title,
           'description': description,
-          'category': category,
-          'tags': tags,
-          'videoUrl': videoUrlPath,
-          'thumbnailUrl': thumbnailUrlPath,
           'userId': user.$id,
           'username': user.name,
-          'view_count': 0,
+          'category': category,
+          'tags': tags.trim(),
+          'url_4k': uploadedVideoUrl,
+          'thumbnailUrl': uploadedThumbUrl,
+          'adminStatus': 'pending',
+          'compressionStatus': 'waiting',
+          'sourceFileId': videoKey,
           'likeCount': 0,
           'commentCount': 0,
-          'createdAt': DateTime.now().toIso8601String(), 
+          'view_count': 0,
+          // No createdAt (System handles it)
         },
         permissions: [
           Permission.read(Role.any()),
@@ -159,25 +233,35 @@ class UploadNotifier extends StateNotifier<UploadState> {
           Permission.delete(Role.user(user.$id)),
         ]
       );
-      
-      // Cleanup cache
-      await VideoCompress.deleteAllCache();
 
-      state = UploadState(isLoading: false, progress: 1.0, successMessage: "Upload Successful!");
+      // Success
+      uploadedVideoUrl = null; 
+      uploadedThumbUrl = null;
+      _currentKey = null; // Clear cleanup reference
+
+      state = UploadState(isLoading: false, progress: 100, successMessage: "Video Uploaded Successfully!");
 
     } catch (e) {
-      print("Upload Error: $e");
-      // Cleanup orphaned files using static client
-      if (videoId != null) {
-        try { await AppwriteClient.storage.deleteFile(bucketId: AppwriteClient.bucketIdVideos, fileId: videoId); } catch (_) {}
-      }
-      if (thumbnailId != null) {
-        try { await AppwriteClient.storage.deleteFile(bucketId: AppwriteClient.bucketIdVideos, fileId: thumbnailId); } catch (_) {}
-      }
+      // --- ERROR & CLEANUP HANDLER ---
+      print("Upload Error/Cancel: $e");
+      
+      String msg = e.toString().contains("Cancelled") ? "Upload Cancelled" : "Upload Failed: ${e.toString()}";
+      state = UploadState(isLoading: false, error: msg);
 
-      state = UploadState(isLoading: false, error: e.toString());
-    } finally {
-      subscription?.unsubscribe();
+      // Execute Cleanup
+      if (uploadedVideoUrl != null) {
+        final key = _getKeyFromUrl(uploadedVideoUrl!);
+        if (key != null) await _deleteFromR2(dotenv.env['R2_TEMP_BUCKET_NAME']!, key);
+      }
+      // If we failed mid-upload, use the tracked keys
+      else if (_currentBucket != null && _currentKey != null) {
+        await _deleteFromR2(_currentBucket!, _currentKey!);
+      }
+      
+      if (uploadedThumbUrl != null) {
+         final key = _getKeyFromUrl(uploadedThumbUrl!);
+         if (key != null) await _deleteFromR2(dotenv.env['R2_BUCKET_ID']!, key);
+      }
     }
   }
 }

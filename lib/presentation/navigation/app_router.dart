@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // <--- ADD THIS IMPORT
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/models/status.dart'; 
 import 'package:ofgconnects_mobile/presentation/pages/following_page.dart';
@@ -20,7 +21,11 @@ import 'package:ofgconnects_mobile/presentation/pages/user_profile_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/create_status_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/status_view_page.dart';
 
-// NOTE: LoginPage is removed. AuthGate handles initial state.
+// --- ADD THIS PROVIDER DEFINITION ---
+final routerProvider = Provider<GoRouter>((ref) {
+  return router;
+});
+// ------------------------------------
 
 final router = GoRouter(
   initialLocation: '/',

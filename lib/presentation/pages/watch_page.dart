@@ -9,7 +9,7 @@ import 'package:intl/intl.dart';
 // Import your project files
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/logic/video_providers.dart'; // Where you saved the providers
+import 'package:ofgconnects_mobile/logic/video_provider.dart'; 
 import 'package:ofgconnects_mobile/models/video.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
@@ -243,14 +243,13 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           data: (video) {
             
             // Initialize player once we have data
-            // Priority: url_4k -> videoUrl
-            final urlToPlay = video.url_4k ?? video.videoUrl;
-            if (urlToPlay != null) {
+            final urlToPlay = video.videoUrl;
+            if (urlToPlay.isNotEmpty) {
               _initializePlayer(urlToPlay);
             }
 
             // Use local incremented count if available, else DB count
-            final displayViews = _localViewCount ?? video.view_count;
+            final displayViews = _localViewCount ?? video.viewCount;
 
             return Column(
               children: [
@@ -306,7 +305,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                                     radius: 18,
                                     backgroundColor: Colors.blueAccent,
                                     child: Text(
-                                      video.username.isNotEmpty ? video.username[0].toUpperCase() : "?",
+                                      video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : "?",
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -316,7 +315,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(video.username, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                        Text(video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                                         // Optional: Subscriber count here
                                       ],
                                     ),
@@ -476,7 +475,7 @@ class _SuggestedVideosList extends ConsumerWidget {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               onTap: () {
                 // Navigate to this video (Replace or Push)
-                context.push('/watch/${v.id}');
+                context.push('/home/watch/${v.id}');
               },
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -489,7 +488,7 @@ class _SuggestedVideosList extends ConsumerWidget {
                 ),
               ),
               title: Text(v.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 14)),
-              subtitle: Text(v.username, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              subtitle: Text(v.creatorName, style: const TextStyle(color: Colors.grey, fontSize: 12)),
               trailing: const Icon(Icons.more_vert, size: 16, color: Colors.grey),
             );
           },

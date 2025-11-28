@@ -4,37 +4,43 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0' # Updated to be safe for modern Flutter
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
   # --- 1. BACKEND & NETWORK ---
-  appwrite: ^13.0.0        # Updated to latest stable Flutter SDK
-  minio: ^3.5.8            # For Cloudflare R2 Uploads
-  flutter_dotenv: ^5.1.0   # To load .env keys
+  appwrite: ^14.0.0
+  minio: ^3.5.8
+  flutter_dotenv: ^5.1.0
 
   # --- 2. STATE MANAGEMENT ---
-  flutter_riverpod: ^2.5.1
+  flutter_riverpod: ^2.6.1
+  state_notifier: ^1.0.0
 
   # --- 3. NAVIGATION ---
   go_router: ^14.0.0
 
   # --- 4. MEDIA & UPLOAD ---
-  image_picker: ^1.1.1     # Selecting video/images
-  image_cropper: ^6.0.0    # If you crop thumbnails
+  image_picker: ^1.1.1
+  image_cropper: ^8.0.2     # Kept at 8.0.2 to fix 'web' package conflict
   flutter_cache_manager: ^3.3.2
-  path: ^1.9.0             # Helper for filenames
+  path: ^1.9.0
 
-  # --- 5. VIDEO PLAYER (For WatchPage) ---
-  video_player: ^2.8.6     # Base player
-  chewie: ^1.8.1           # UI Controls for Video Player
+  # --- 5. VIDEO PLAYER ---
+  video_player: ^2.8.6
+  chewie: ^1.8.1
   
   # --- 6. UTILITIES ---
-  intl: ^0.19.0            # For formatting "1.2K views"
-  share_plus: ^10.0.0       # For the Share button functionality
+  intl: ^0.19.0
+  share_plus: ^10.0.0
   cupertino_icons: ^1.0.6
+
+# FIX: Force the newer version of flutter_web_auth_2 globally
+# This fixes the "Unresolved reference Registrar" error on Android
+dependency_overrides:
+  flutter_web_auth_2: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -43,7 +49,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-  # Ensure your .env file is actually created at the root of your project
   assets:
     - .env

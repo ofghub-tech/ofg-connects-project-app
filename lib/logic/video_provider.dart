@@ -1,6 +1,7 @@
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:state_notifier/state_notifier.dart'; // <--- ADDED THIS IMPORT
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
@@ -38,7 +39,7 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
   final int _limit = 10; 
   String? _lastId;
 
-  // PUBLIC METHODS (Changed from private so they can be overridden)
+  // PUBLIC METHODS
   Future<List<Document>> fetchPage(List<String> queries);
   T fromDocument(Document doc);
 

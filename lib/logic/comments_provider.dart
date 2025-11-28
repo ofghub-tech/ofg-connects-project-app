@@ -4,6 +4,7 @@ import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:state_notifier/state_notifier.dart'; // <--- ADDED
 import 'package:ofgconnects_mobile/logic/video_provider.dart'; // Important for refreshing video details
 
 // 1. State Class

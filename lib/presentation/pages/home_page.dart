@@ -114,6 +114,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   
                   // Other Users' Statuses
+                  // FIX: Removed 'const' because CircularProgressIndicator is not const
                   if (statusState.isLoading && statusState.groupedStatuses.isEmpty)
                      const Padding(padding: EdgeInsets.only(left:16), child: Center(child: CircularProgressIndicator())),
                   
@@ -154,6 +155,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 SizedBox(
                   height: 260,
                   child: (shortsState.items.isEmpty && shortsState.isLoadingMore)
+                      // FIX: Removed 'const' here
                       ? const Center(child: CircularProgressIndicator())
                       : ListView.builder(
                           controller: _shortsScrollController,
@@ -164,6 +166,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             if (index == shortsState.items.length) {
                               return Center(
                                 child: shortsState.isLoadingMore
+                                    // FIX: Removed 'const' here
                                     ? const Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator())
                                     : const SizedBox(width: 50),
                               );
@@ -197,6 +200,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
 
           // --- 2. Videos List ---
+          // FIX: Removed 'const' here
           if (videosState.items.isEmpty && videosState.isLoadingMore)
             const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
           else if (videosState.items.isEmpty)
@@ -212,6 +216,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 (context, index) {
                   if (index == videosState.items.length) {
                     return videosState.isLoadingMore
+                        // FIX: Removed 'const' here
                         ? const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator()))
                         : const SizedBox(height: 100); 
                   }

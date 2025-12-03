@@ -26,6 +26,7 @@ class OtherUserVideosNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.equal('userId', userId),
+        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],

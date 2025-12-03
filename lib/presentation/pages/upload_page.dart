@@ -73,6 +73,23 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   Future<void> _pickVideo() async {
     final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
     if (video != null) {
+      // --- NEW CHECK: Validate Extension ---
+      final String extension = video.path.split('.').last.toLowerCase();
+      
+      // Allow only MP4 and MOV (iOS default)
+      if (extension != 'mp4' && extension != 'mov') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Format not supported. Please choose an MP4 or MOV video.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
+      // -------------------------------------
+
       final file = File(video.path);
       final size = await file.length();
       
@@ -171,7 +188,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                                 SizedBox(height: 16),
                                 Text('Tap to Select Video', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                                 SizedBox(height: 8),
-                                Text('MP4, MKV, MOV (Max 5GB)', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                Text('MP4, MOV (Max 5GB)', style: TextStyle(color: Colors.grey, fontSize: 12)),
                               ],
                             )
                           : Column(

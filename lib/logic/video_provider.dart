@@ -1,7 +1,7 @@
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart'; // <--- ADDED THIS IMPORT
+import 'package:state_notifier/state_notifier.dart'; 
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
@@ -140,6 +140,7 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.equal('category', 'shorts'),
+        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -168,6 +169,7 @@ class VideosListNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.notEqual('category', 'shorts'),
+        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -197,6 +199,7 @@ class UserVideosNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.equal('userId', user.$id),
+        // Note: We DO NOT filter by 'approved' here so users can see their own pending uploads.
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -301,7 +304,8 @@ class PaginatedFollowingNotifier extends PaginatedListNotifier<Video> {
       databaseId: AppwriteClient.databaseId,
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
-        Query.equal('userId', safeIds), 
+        Query.equal('userId', safeIds),
+        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -332,6 +336,7 @@ final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref,
     databaseId: AppwriteClient.databaseId,
     collectionId: AppwriteClient.collectionIdVideos,
     queries: [
+      Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
       Query.limit(10),
       Query.orderDesc('\$createdAt'),
     ],

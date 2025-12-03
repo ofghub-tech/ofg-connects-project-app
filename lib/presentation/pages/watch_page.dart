@@ -9,8 +9,11 @@ import 'package:intl/intl.dart';
 // Import your project files
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; 
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart'; 
+// --- ADDED THIS IMPORT ---
+import 'package:ofgconnects_mobile/logic/interaction_provider.dart'; 
 
 class WatchPage extends ConsumerStatefulWidget {
   final String videoId;
@@ -32,15 +35,16 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   String? _savedDocId;
   bool _isTogglingSave = false;
   
+  // UI State
+  bool _isDescriptionExpanded = false;
+
   // Local view count to update UI instantly without refetching
   int? _localViewCount; 
 
   @override
   void initState() {
     super.initState();
-    // 1. Check if video is saved (Watch Later)
     _checkSavedStatus();
-    // 2. Log View
     _logView();
   }
 
@@ -101,7 +105,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       final databases = ref.read(databasesProvider);
 
       if (_isSaved && _savedDocId != null) {
-        // Remove
         await databases.deleteDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdWatchLater,
@@ -112,7 +115,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           _savedDocId = null;
         });
       } else {
-        // Add
         final uniqueId = ID.unique();
         final response = await databases.createDocument(
           databaseId: AppwriteClient.databaseId,
@@ -142,13 +144,11 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   // --- LOGIC: LOG VIEW COUNT ---
   Future<void> _logView() async {
     final user = ref.read(authProvider).user;
-    // Note: You might want to allow anonymous view logging, but mirroring React logic:
     if (user == null) return; 
 
     try {
       final databases = ref.read(databasesProvider);
       
-      // 1. Check History
       final historyCheck = await databases.listDocuments(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdHistory,
@@ -159,10 +159,8 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         ],
       );
 
-      // If already viewed, stop
       if (historyCheck.total > 0) return;
 
-      // 2. Add to History
       await databases.createDocument(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdHistory,
@@ -171,9 +169,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         permissions: [Permission.read(Role.user(user.$id)), Permission.write(Role.user(user.$id))],
       );
 
-      // 3. Update Video View Count
-      // We need current count first. We can get it from the provider state if loaded,
-      // or fetch fresh. Let's fetch fresh to be safe (atomic increment isn't available via client SDK easily)
       final doc = await databases.getDocument(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdVideos,
@@ -215,12 +210,12 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       materialProgressColors: ChewieProgressColors(
         playedColor: Colors.blueAccent,
         handleColor: Colors.blueAccent,
-        backgroundColor: Colors.grey,
+        backgroundColor: Colors.grey.shade800,
         bufferedColor: Colors.white24,
       ),
       placeholder: Container(color: Colors.black),
       errorBuilder: (context, errorMessage) {
-        return Center(child: Text("Video Error: $errorMessage", style: TextStyle(color: Colors.white)));
+        return Center(child: Text("Video Error: $errorMessage", style: const TextStyle(color: Colors.white)));
       },
     );
 
@@ -229,228 +224,316 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     });
   }
 
+  void _showCommentsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (_, controller) => CommentsSheet(videoId: widget.videoId, scrollController: controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 1. Fetch Video Details
     final videoAsync = ref.watch(videoDetailsProvider(widget.videoId));
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        child: videoAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => Center(child: Text('Error: $err', style: TextStyle(color: Colors.red))),
-          data: (video) {
-            
-            // Initialize player once we have data
-            final urlToPlay = video.videoUrl;
-            if (urlToPlay.isNotEmpty) {
-              _initializePlayer(urlToPlay);
-            }
+      backgroundColor: const Color(0xFF0F0F0F), // True dark mode bg
+      body: videoAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.red))),
+        data: (video) {
+          
+          if (video.videoUrl.isNotEmpty) {
+            _initializePlayer(video.videoUrl);
+          }
 
-            // Use local incremented count if available, else DB count
-            final displayViews = _localViewCount ?? video.viewCount;
+          final displayViews = _localViewCount ?? video.viewCount;
+          final formattedViews = NumberFormat.compact().format(displayViews);
+          final timeAgo = _formatTimeAgo(video.createdAt);
 
-            return Column(
-              children: [
-                // --- VIDEO PLAYER SECTION ---
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Container(
-                    color: Colors.black,
+          return Column(
+            children: [
+              // --- 1. VIDEO PLAYER (Sticky Top) ---
+              Container(
+                color: Colors.black,
+                child: SafeArea(
+                  bottom: false,
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
                     child: _isPlayerInitialized && _chewieController != null
                         ? Chewie(controller: _chewieController!)
                         : const Center(child: CircularProgressIndicator(color: Colors.white24)),
                   ),
                 ),
+              ),
 
-                // --- SCROLLABLE CONTENT ---
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // INFO PANEL
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Title
-                              Text(
-                                video.title,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              // --- 2. SCROLLABLE CONTENT ---
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title
+                            Text(
+                              video.title,
+                              style: const TextStyle(
+                                fontSize: 20, 
+                                fontWeight: FontWeight.bold, 
+                                color: Colors.white,
+                                height: 1.3
                               ),
-                              const SizedBox(height: 8),
-                              
-                              // Views & Date
-                              Row(
-                                children: [
-                                  Icon(Icons.visibility_outlined, size: 16, color: Colors.grey[400]),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${NumberFormat.compact().format(displayViews)} views',
-                                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
-                                  ),
-                                  // Add Date here if needed
-                                ],
-                              ),
-                              const SizedBox(height: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            
+                            // Metadata Row
+                            Text(
+                              '$formattedViews views • $timeAgo',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                            ),
+                            const SizedBox(height: 16),
 
-                              // --- CHANNEL & ACTIONS ROW ---
-                              Row(
-                                children: [
-                                  // Avatar
-                                  CircleAvatar(
+                            // --- CHANNEL SECTION ---
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () => context.push('/profile/${video.creatorId}?name=${Uri.encodeComponent(video.creatorName)}'),
+                                  child: CircleAvatar(
                                     radius: 18,
-                                    backgroundColor: Colors.blueAccent,
+                                    backgroundColor: Colors.grey[800],
                                     child: Text(
                                       video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : "?",
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  // Name
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                        // Optional: Subscriber count here
-                                      ],
-                                    ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => context.push('/profile/${video.creatorId}?name=${Uri.encodeComponent(video.creatorName)}'),
+                                        child: Text(
+                                          video.creatorName,
+                                          style: const TextStyle(
+                                            color: Colors.white, 
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16
+                                          ),
+                                        ),
+                                      ),
+                                      // Optional: Text("1.2K subscribers", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                    ],
                                   ),
-                                  // Follow Button (Placeholder logic)
-                                  ElevatedButton(
-                                    onPressed: () { /* Follow Logic */ },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: Colors.black,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                      minimumSize: const Size(0, 36)
-                                    ),
-                                    child: const Text("Subscribe"),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () { /* Follow Logic */ },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                    minimumSize: const Size(0, 36),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))
+                                  ),
+                                  child: const Text("Subscribe"),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // --- PILL ACTIONS ROW ---
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _PillButton(
+                                    icon: Icons.thumb_up_outlined,
+                                    label: "${video.likeCount}",
+                                    onTap: () => ref.read(interactionProvider).toggleLike(video.id),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _PillButton(
+                                    icon: Icons.share_outlined,
+                                    label: "Share",
+                                    onTap: () {},
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _PillButton(
+                                    icon: _isSaved ? Icons.bookmark : Icons.bookmark_border,
+                                    label: _isSaved ? "Saved" : "Save",
+                                    active: _isSaved,
+                                    onTap: _isTogglingSave ? null : _toggleSave,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _PillButton(
+                                    icon: Icons.flag_outlined,
+                                    label: "Report",
+                                    onTap: () {},
                                   ),
                                 ],
                               ),
+                            ),
 
-                              const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                              // --- ACTION BUTTONS (Scrollable Row) ---
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: [
-                                    _ActionButton(
-                                      icon: Icons.thumb_up_outlined,
-                                      label: "${video.likeCount}",
-                                      onTap: () { /* Like Logic */ },
-                                    ),
-                                    const SizedBox(width: 12),
-                                    _ActionButton(
-                                      icon: Icons.share_outlined,
-                                      label: "Share",
-                                      onTap: () { /* Share Logic */ },
-                                    ),
-                                    const SizedBox(width: 12),
-                                    _ActionButton(
-                                      icon: _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                                      label: _isSaved ? "Saved" : "Save",
-                                      activeColor: _isSaved,
-                                      onTap: _isTogglingSave ? null : _toggleSave,
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // --- DESCRIPTION ---
-                              Container(
+                            // --- COLLAPSIBLE DESCRIPTION ---
+                            GestureDetector(
+                              onTap: () => setState(() => _isDescriptionExpanded = !_isDescriptionExpanded),
+                              child: Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.05),
+                                  color: Colors.white.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Text(
-                                  video.description.isNotEmpty ? video.description : "No description.",
-                                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Description",
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      video.description.isNotEmpty ? video.description : "No description provided.",
+                                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                      maxLines: _isDescriptionExpanded ? null : 2,
+                                      overflow: _isDescriptionExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                                    ),
+                                    if (video.description.length > 50)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          _isDescriptionExpanded ? "Show less" : "...more",
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // --- COMMENTS PREVIEW ---
+                      GestureDetector(
+                        onTap: () => _showCommentsSheet(context),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text("Comments", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              const SizedBox(width: 8),
+                              Text("${video.videoUrl.length % 5}", style: TextStyle(color: Colors.grey[400])), // Fake count for now
+                              const Spacer(),
+                              const Icon(Icons.unfold_more, color: Colors.white54, size: 20),
                             ],
                           ),
                         ),
+                      ),
 
-                        const Divider(color: Colors.white10),
+                      const SizedBox(height: 24),
+                      const Divider(color: Colors.white10, thickness: 4),
+                      const SizedBox(height: 16),
 
-                        // --- SUGGESTED VIDEOS ---
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Text("Up Next", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                        ),
-                        
-                        _SuggestedVideosList(currentVideoId: video.id),
-                        
-                        const SizedBox(height: 20),
-                        
-                        // --- COMMENTS ---
-                        // You can navigate to a bottom sheet or show them here
-                        Center(
-                           child: TextButton(
-                             onPressed: () {
-                               // Open Comments Bottom Sheet
-                             },
-                             child: const Text("Show Comments"),
-                           ),
-                        ),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
+                      // --- UP NEXT HEADER ---
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                        child: Text("Up Next", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                      ),
+                      
+                      const SizedBox(height: 12),
+
+                      _SuggestedVideosList(currentVideoId: video.id),
+                      
+                      const SizedBox(height: 40),
+                    ],
                   ),
                 ),
-              ],
-            );
-          },
-        ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+
+  String _formatTimeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays > 365) return '${(diff.inDays / 365).floor()}y ago';
+    if (diff.inDays > 30) return '${(diff.inDays / 30).floor()}mo ago';
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
 }
 
-// --- SUB-WIDGET: ACTION BUTTON ---
-class _ActionButton extends StatelessWidget {
+// --- MODERN PILL BUTTON ---
+class _PillButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  final bool activeColor;
+  final bool active;
 
-  const _ActionButton({required this.icon, required this.label, this.onTap, this.activeColor = false});
+  const _PillButton({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.active = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: active ? Colors.white : Colors.white.withOpacity(0.1),
       borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: activeColor ? Colors.white : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: activeColor ? Colors.black : Colors.white),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: activeColor ? Colors.black : Colors.white, fontWeight: FontWeight.w500)),
-          ],
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: active ? Colors.black : Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// --- SUB-WIDGET: SUGGESTED VIDEOS ---
+// --- SUGGESTED VIDEOS (Reused Logic) ---
 class _SuggestedVideosList extends ConsumerWidget {
   final String currentVideoId;
   const _SuggestedVideosList({required this.currentVideoId});
@@ -460,36 +543,78 @@ class _SuggestedVideosList extends ConsumerWidget {
     final suggestionsAsync = ref.watch(suggestedVideosProvider(currentVideoId));
 
     return suggestionsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
       error: (e, _) => const SizedBox.shrink(),
       data: (videos) {
         if (videos.isEmpty) return const Padding(padding: EdgeInsets.all(16), child: Text("No related videos.", style: TextStyle(color: Colors.grey)));
 
         return ListView.builder(
-          shrinkWrap: true, // Important inside SingleChildScrollView
+          shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: videos.length,
           itemBuilder: (context, index) {
             final v = videos[index];
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            return InkWell(
               onTap: () {
-                // Navigate to this video (Replace or Push)
+                // IMPORTANT: Push to same route to refresh params
                 context.push('/home/watch/${v.id}');
               },
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  v.thumbnailUrl ?? '', 
-                  width: 100, 
-                  height: 56, 
-                  fit: BoxFit.cover,
-                  errorBuilder: (c, o, s) => Container(width: 100, height: 56, color: Colors.grey),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Thumbnail
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 140,
+                        height: 80,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              v.thumbnailUrl, 
+                              fit: BoxFit.cover,
+                              errorBuilder: (_,__,___) => Container(color: Colors.grey[800]),
+                            ),
+                            // Duration Pill (Mock)
+                            Positioned(
+                              bottom: 4, right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                                child: const Text("VIDEO", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            v.title, 
+                            maxLines: 2, 
+                            overflow: TextOverflow.ellipsis, 
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "${v.creatorName} • ${NumberFormat.compact().format(v.viewCount)} views",
+                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                  ],
                 ),
               ),
-              title: Text(v.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 14)),
-              subtitle: Text(v.creatorName, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              trailing: const Icon(Icons.more_vert, size: 16, color: Colors.grey),
             );
           },
         );

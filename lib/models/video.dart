@@ -1,12 +1,11 @@
-// lib/models/video.dart
 import 'package:appwrite/models.dart';
 
 class Video {
   final String id;
   final String title;
   final String description;
-  final String thumbnailUrl; // This field is for the URL
-  final String videoUrl;     // This field is for the URL
+  final String thumbnailUrl;
+  final String videoUrl;
   final String creatorId;
   final String creatorName;
   final String category;
@@ -15,11 +14,9 @@ class Video {
   final int likeCount;
   final DateTime createdAt;
 
-  // --- BACKWARD COMPATIBILITY GETTERS ---
-  // These map the old property names to the new URL fields
+  // ... (keep your existing getters and constructor) ...
   String get thumbnailId => thumbnailUrl;
   String get videoId => videoUrl; 
-  // --------------------------------------
 
   Video({
     required this.id,
@@ -42,7 +39,12 @@ class Video {
       title: doc.data['title'] ?? 'Untitled',
       description: doc.data['description'] ?? '',
       thumbnailUrl: doc.data['thumbnailUrl'] ?? '',
-      videoUrl: doc.data['videoUrl'] ?? '',
+      // --- FIX IS HERE ---
+      // Try 'url_4k' first (where the web uploads to). If empty, try 'videoUrl'.
+      videoUrl: (doc.data['url_4k'] != null && doc.data['url_4k'].isNotEmpty)
+          ? doc.data['url_4k']
+          : (doc.data['videoUrl'] ?? ''), 
+      // -------------------
       creatorId: doc.data['userId'] ?? '',
       creatorName: doc.data['username'] ?? 'Unknown',
       category: doc.data['category'] ?? 'general',

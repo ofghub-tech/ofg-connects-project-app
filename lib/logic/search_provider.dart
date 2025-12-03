@@ -27,7 +27,8 @@ final searchResultsProvider = FutureProvider<List<Video>>((ref) async {
       Query.search('title', query),
       Query.search('tags', query),
       Query.search('username', query),
-      Query.limit(50), // Matches the limit in SearchPage.js
+      Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
+      Query.limit(50), 
     ],
   );
 

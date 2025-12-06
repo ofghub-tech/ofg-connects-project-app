@@ -24,7 +24,7 @@ dependencies:
 
   # --- 4. MEDIA & UPLOAD ---
   image_picker: ^1.1.1
-  image_cropper: ^8.0.2     # Kept at 8.0.2 to fix 'web' package conflict
+  image_cropper: ^8.0.2
   flutter_cache_manager: ^3.3.2
   path: ^1.9.0
 
@@ -37,8 +37,9 @@ dependencies:
   share_plus: ^10.0.0
   cupertino_icons: ^1.0.6
 
-# FIX: Force the newer version of flutter_web_auth_2 globally
-# This fixes the "Unresolved reference Registrar" error on Android
+  # --- 7. MONETIZATION (ADDED) ---
+  google_mobile_ads: ^5.1.0
+
 dependency_overrides:
   flutter_web_auth_2: ^4.1.0
 

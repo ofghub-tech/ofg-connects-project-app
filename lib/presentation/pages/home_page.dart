@@ -1,4 +1,3 @@
-// lib/presentation/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,9 +6,9 @@ import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/animate_in_effect.dart';
-// --- NEW IMPORTS ---
 import 'package:ofgconnects_mobile/logic/status_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/status_bubble.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/feed_ad_card.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -41,7 +40,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(shortsListProvider.notifier).fetchFirstBatch();
       ref.read(videosListProvider.notifier).fetchFirstBatch();
-      // Fetch statuses
       ref.read(statusProvider.notifier).fetchStatuses();
     });
   }
@@ -60,6 +58,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     final statusState = ref.watch(statusProvider);
     final currentUser = ref.watch(authProvider).user;
 
+    // Defined here so it can be used in childCount
+    const int frequency = 2; 
+
     return Scaffold(
       body: CustomScrollView(
         controller: _scrollController,
@@ -69,12 +70,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           // --- 0. STATUS SECTION ---
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 110,
+              height: 135,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 children: [
-                  // My Status Button
                   GestureDetector(
                     onTap: () => context.push('/create-status'),
                     child: Container(
@@ -113,13 +113,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ),
                   
-                  // Other Users' Statuses
-                  // FIX: Removed 'const' because CircularProgressIndicator is not const
                   if (statusState.isLoading && statusState.groupedStatuses.isEmpty)
                      const Padding(padding: EdgeInsets.only(left:16), child: Center(child: CircularProgressIndicator())),
                   
                   ...statusState.groupedStatuses.entries.map((entry) {
-                    // Don't show my own status in the feed list here
                     if (entry.key == currentUser?.$id) return const SizedBox.shrink();
                     
                     return StatusBubble(
@@ -155,7 +152,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 SizedBox(
                   height: 260,
                   child: (shortsState.items.isEmpty && shortsState.isLoadingMore)
-                      // FIX: Removed 'const' here
                       ? const Center(child: CircularProgressIndicator())
                       : ListView.builder(
                           controller: _shortsScrollController,
@@ -166,7 +162,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                             if (index == shortsState.items.length) {
                               return Center(
                                 child: shortsState.isLoadingMore
-                                    // FIX: Removed 'const' here
                                     ? const Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator())
                                     : const SizedBox(width: 50),
                               );
@@ -199,8 +194,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
 
-          // --- 2. Videos List ---
-          // FIX: Removed 'const' here
+          // --- 2. Videos List with ADS ---
           if (videosState.items.isEmpty && videosState.isLoadingMore)
             const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
           else if (videosState.items.isEmpty)
@@ -214,19 +208,27 @@ class _HomePageState extends ConsumerState<HomePage> {
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  if (index == videosState.items.length) {
-                    return videosState.isLoadingMore
-                        // FIX: Removed 'const' here
+                  // indices
+                  int videoIndex = index - (index ~/ (frequency + 1));
+                  bool isAdSlot = (index + 1) % (frequency + 1) == 0;
+
+                  if (videoIndex >= videosState.items.length) {
+                     return videosState.isLoadingMore
                         ? const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator()))
                         : const SizedBox(height: 100); 
                   }
-                  
+
+                  if (isAdSlot) {
+                    // FIX: REMOVED 'const' HERE
+                    return FeedAdCard(); 
+                  }
+
                   return AnimateInEffect(
                     index: index,
-                    child: VideoCard(video: videosState.items[index]),
+                    child: VideoCard(video: videosState.items[videoIndex]),
                   );
                 },
-                childCount: videosState.items.length + (videosState.hasMore ? 1 : 0),
+                childCount: videosState.items.length + (videosState.items.length ~/ frequency) + 1,
               ),
             ),
         ],

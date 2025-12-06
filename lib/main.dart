@@ -3,27 +3,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// Ensure this path matches where you put the file below
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // <--- IMPORT THIS
 import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart'; 
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Load Env (Safe Mode)
+  // 1. Initialize AdMob (Safe unawaited call)
+  MobileAds.instance.initialize();
+
+  // 2. Load Env (Safe Mode)
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     print("Warning: .env file not found. Ensure it exists in assets.");
   }
   
-  // 2. Lock Orientation (Best for video apps, let the player handle landscape)
+  // 3. Lock Orientation
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // 3. Immersive UI
+  // 4. Immersive UI
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -58,7 +61,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      // Good logic: refresh session on app resume
       await Future.delayed(const Duration(milliseconds: 1000));
       if (mounted) ref.read(authProvider.notifier).checkUserStatus();
     }
@@ -66,11 +68,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // CRITICAL FIX: Watch the router provider so redirects work
     final goRouter = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      routerConfig: goRouter, // Use the watched provider
+      routerConfig: goRouter,
       title: 'OFG Connects',
       debugShowCheckedModeBanner: false,
       
@@ -80,7 +81,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         scaffoldBackgroundColor: const Color(0xFF0F0F0F),
         primaryColor: Colors.blueAccent,
         
-        // --- SMOOTH TRANSITIONS ---
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: ZoomPageTransitionsBuilder(), 

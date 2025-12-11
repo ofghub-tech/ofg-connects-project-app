@@ -66,6 +66,23 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
     }
   }
 
+  Future<void> refresh() async {
+    _lastId = null; 
+    try {
+      final documents = await fetchPage([Query.limit(_limit)]);
+      final newItems = documents.map(fromDocument).toList();
+      _lastId = documents.isNotEmpty ? documents.last.$id : null;
+
+      state = state.copyWith(
+        items: newItems,
+        isLoadingMore: false,
+        hasMore: newItems.length == _limit,
+      );
+    } catch (e) {
+      print("Error refreshing: $e");
+    }
+  }
+
   Future<void> fetchMore() async {
     if (state.isLoadingMore || !state.hasMore || _lastId == null) {
       return;
@@ -140,7 +157,7 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.equal('category', 'shorts'),
-        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
+        Query.equal('adminStatus', 'approved'),
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -169,7 +186,7 @@ class VideosListNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.notEqual('category', 'shorts'),
-        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
+        Query.equal('adminStatus', 'approved'),
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -182,9 +199,11 @@ final videosListProvider = StateNotifierProvider<VideosListNotifier, PaginationS
   return VideosListNotifier(ref);
 });
 
-// C. USER VIDEOS NOTIFIER (My Space - Current User)
-class UserVideosNotifier extends PaginatedListNotifier<Video> {
-  UserVideosNotifier(super.ref);
+// --- UPDATED: USER VIDEOS SPLIT ---
+
+// C1. USER LONG VIDEOS (Profile -> Videos Tab)
+class UserLongVideosNotifier extends PaginatedListNotifier<Video> {
+  UserLongVideosNotifier(super.ref);
 
   @override
   Video fromDocument(Document doc) => Video.fromAppwrite(doc);
@@ -199,7 +218,7 @@ class UserVideosNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.equal('userId', user.$id),
-        // Note: We DO NOT filter by 'approved' here so users can see their own pending uploads.
+        Query.notEqual('category', 'shorts'), // Exclude Shorts
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -208,9 +227,41 @@ class UserVideosNotifier extends PaginatedListNotifier<Video> {
   }
 }
 
-final paginatedUserVideosProvider = StateNotifierProvider<UserVideosNotifier, PaginationState<Video>>((ref) {
-  return UserVideosNotifier(ref);
+final paginatedUserLongVideosProvider = StateNotifierProvider<UserLongVideosNotifier, PaginationState<Video>>((ref) {
+  return UserLongVideosNotifier(ref);
 });
+
+// C2. USER SHORTS (Profile -> Shorts Tab)
+class UserShortsNotifier extends PaginatedListNotifier<Video> {
+  UserShortsNotifier(super.ref);
+
+  @override
+  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
+
+  @override
+  Future<List<Document>> fetchPage(List<String> queries) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return [];
+
+    final response = await ref.read(databasesProvider).listDocuments(
+      databaseId: AppwriteClient.databaseId,
+      collectionId: AppwriteClient.collectionIdVideos,
+      queries: [
+        Query.equal('userId', user.$id),
+        Query.equal('category', 'shorts'), // Only Shorts
+        Query.orderDesc('\$createdAt'),
+        ...queries,
+      ],
+    );
+    return response.documents;
+  }
+}
+
+final paginatedUserShortsProvider = StateNotifierProvider<UserShortsNotifier, PaginationState<Video>>((ref) {
+  return UserShortsNotifier(ref);
+});
+
+// ----------------------------------
 
 // D. LINK NOTIFIERS (Likes, History, Watch Later)
 class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
@@ -305,7 +356,7 @@ class PaginatedFollowingNotifier extends PaginatedListNotifier<Video> {
       collectionId: AppwriteClient.collectionIdVideos,
       queries: [
         Query.equal('userId', safeIds),
-        Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
+        Query.equal('adminStatus', 'approved'),
         Query.orderDesc('\$createdAt'),
         ...queries,
       ],
@@ -336,7 +387,7 @@ final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref,
     databaseId: AppwriteClient.databaseId,
     collectionId: AppwriteClient.collectionIdVideos,
     queries: [
-      Query.equal('adminStatus', 'approved'), // --- ADDED: Filter Approved ---
+      Query.equal('adminStatus', 'approved'), 
       Query.limit(10),
       Query.orderDesc('\$createdAt'),
     ],

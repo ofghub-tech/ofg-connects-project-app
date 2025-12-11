@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ofgconnects_mobile/logic/upload_provider.dart';
-// REMOVED: import 'package:video_compress/video_compress.dart'; (Not needed anymore)
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 
 class UploadPage extends ConsumerStatefulWidget {
   const UploadPage({super.key});
@@ -31,7 +34,10 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   File? _thumbnailFile;
   final ImagePicker _picker = ImagePicker();
 
-  // For displaying file size to user
+  VideoPlayerController? _videoController;
+  ChewieController? _chewieController;
+  bool _isGeneratingThumbnail = false;
+
   String _fileSizeString = "";
 
   @override
@@ -45,22 +51,20 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     _titleController.dispose();
     _descriptionController.dispose();
     _tagsController.dispose();
+    _videoController?.dispose();
+    _chewieController?.dispose();
     super.dispose();
   }
 
-  // Helper to format file size
   String _formatBytes(int bytes, int decimals) {
     if (bytes <= 0) return "0 B";
     const suffixes = ["B", "KB", "MB", "GB", "TB"];
-    var i = (bytes.toString().length - 1) / 3; // Log10 approximation
+    var i = (bytes.toString().length - 1) / 3; 
     int index = i.floor();
     if (index >= suffixes.length) index = suffixes.length - 1;
-    double size = bytes / (1 << (10 * index)).toDouble(); // Binary division
-    // Fix for 1024 math vs clean display
+    double size = bytes / (1 << (10 * index)).toDouble(); 
     if (bytes < 1024) return "$bytes B";
     
-    // Simple loop approach is safer for dart
-    int div = 1;
     int suffixIndex = 0;
     double value = bytes.toDouble();
     while (value >= 1024 && suffixIndex < suffixes.length - 1) {
@@ -70,25 +74,80 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     return "${value.toStringAsFixed(decimals)} ${suffixes[suffixIndex]}";
   }
 
+  Future<void> _initializePlayer(File file) async {
+    _videoController?.dispose();
+    _chewieController?.dispose();
+    _videoController = null;
+    _chewieController = null;
+
+    try {
+      _videoController = VideoPlayerController.file(file);
+      await _videoController!.initialize();
+      
+      _chewieController = ChewieController(
+        videoPlayerController: _videoController!,
+        autoPlay: false,
+        looping: false,
+        aspectRatio: _videoController!.value.aspectRatio,
+        allowFullScreen: true,
+        allowMuting: true,
+        showControls: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: Colors.blueAccent,
+          handleColor: Colors.blueAccent,
+          backgroundColor: Colors.grey,
+          bufferedColor: Colors.white24,
+        ),
+        placeholder: const Center(child: CircularProgressIndicator()),
+        errorBuilder: (context, errorMessage) {
+          return Center(child: Text(errorMessage, style: const TextStyle(color: Colors.white)));
+        },
+      );
+      
+      setState(() {}); 
+    } catch (e) {
+      print("Error initializing video player: $e");
+    }
+  }
+
+  Future<void> _generateThumbnail(File video) async {
+    setState(() => _isGeneratingThumbnail = true);
+    
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final path = await VideoThumbnail.thumbnailFile(
+        video: video.path,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxHeight: 1280, // Increased quality for shorts
+        quality: 80,
+      );
+
+      if (path != null) {
+        setState(() {
+          _thumbnailFile = File(path);
+        });
+      }
+    } catch (e) {
+      print("Error generating thumbnail: $e");
+    } finally {
+      setState(() => _isGeneratingThumbnail = false);
+    }
+  }
+
   Future<void> _pickVideo() async {
     final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
     if (video != null) {
-      // --- NEW CHECK: Validate Extension ---
       final String extension = video.path.split('.').last.toLowerCase();
       
-      // Allow only MP4 and MOV (iOS default)
       if (extension != 'mp4' && extension != 'mov') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Format not supported. Please choose an MP4 or MOV video.'),
-              backgroundColor: Colors.redAccent,
-            ),
+            const SnackBar(content: Text('Format not supported. Please choose an MP4 or MOV video.')),
           );
         }
         return;
       }
-      // -------------------------------------
 
       final file = File(video.path);
       final size = await file.length();
@@ -96,7 +155,19 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       setState(() {
         _videoFile = file;
         _fileSizeString = _formatBytes(size, 2);
+        _thumbnailFile = null; 
       });
+
+      await _initializePlayer(file);
+      
+      // Auto-detect if short based on aspect ratio
+      if (_videoController != null && _videoController!.value.aspectRatio < 1.0) {
+        setState(() {
+          _selectedCategoryLabel = 'Short Video'; // Auto-select category
+        });
+      }
+
+      await _generateThumbnail(file);
     }
   }
 
@@ -119,7 +190,8 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       return;
     }
 
-    // No compression logic here anymore. Direct upload.
+    _videoController?.pause();
+
     await ref.read(uploadProvider.notifier).uploadVideo(
       videoFile: _videoFile!,
       thumbnailFile: _thumbnailFile,
@@ -134,7 +206,12 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   Widget build(BuildContext context) {
     final uploadState = ref.watch(uploadProvider);
 
-    // Listener for Success/Error/Cancel
+    // Determine if we should show a vertical (Shorts) layout
+    bool isVerticalVideo = false;
+    if (_videoController != null && _videoController!.value.isInitialized) {
+      isVerticalVideo = _videoController!.value.aspectRatio < 1.0;
+    }
+
     ref.listen<UploadState>(uploadProvider, (previous, next) {
       if (next.error != null && !next.isLoading) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -154,9 +231,8 @@ class _UploadPageState extends ConsumerState<UploadPage> {
 
     return Stack(
       children: [
-        // --- MAIN FORM CONTENT ---
         Scaffold(
-          backgroundColor: const Color(0xFF121212), // Darker background
+          backgroundColor: const Color(0xFF121212),
           appBar: AppBar(
             backgroundColor: const Color(0xFF1E1E1E),
             title: const Text('Upload Video', style: TextStyle(color: Colors.white)),
@@ -169,17 +245,21 @@ class _UploadPageState extends ConsumerState<UploadPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Video Picker
+                  
+                  // --- DYNAMIC VIDEO PREVIEW ---
                   GestureDetector(
-                    onTap: uploadState.isLoading ? null : _pickVideo,
-                    child: Container(
-                      height: 200,
+                    onTap: (_videoFile == null && !uploadState.isLoading) ? _pickVideo : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      // Taller for vertical videos
+                      height: isVerticalVideo ? 400 : 240, 
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
                         border: Border.all(color: Colors.white12),
                         borderRadius: BorderRadius.circular(16),
                       ),
+                      clipBehavior: Clip.hardEdge,
                       child: _videoFile == null
                           ? const Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -191,33 +271,44 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                                 Text('MP4, MOV (Max 5GB)', style: TextStyle(color: Colors.grey, fontSize: 12)),
                               ],
                             )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                          : Stack(
                               children: [
-                                const Icon(Icons.check_circle, size: 50, color: Colors.greenAccent),
-                                const SizedBox(height: 12),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                  child: Text(
-                                    _videoFile!.path.split('/').last,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                if (_chewieController != null && _chewieController!.videoPlayerController.value.isInitialized)
+                                  Chewie(controller: _chewieController!)
+                                else
+                                  const Center(child: CircularProgressIndicator()),
+                                
+                                Positioned(
+                                  top: 10, right: 10,
+                                  child: GestureDetector(
+                                    onTap: uploadState.isLoading ? null : _pickVideo,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        children: [
+                                          Icon(Icons.edit, size: 14, color: Colors.white),
+                                          SizedBox(width: 6),
+                                          Text("Change", style: TextStyle(color: Colors.white, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                Text(_fileSizeString, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(20)),
-                                  child: const Text("Change Video", style: TextStyle(color: Colors.blueAccent, fontSize: 12)),
-                                )
                               ],
                             ),
                     ),
                   ),
                   
+                  if (_videoFile != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, left: 4),
+                      child: Text("File Size: $_fileSizeString", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    ),
+
                   const SizedBox(height: 24),
                   
                   // Inputs
@@ -284,33 +375,53 @@ class _UploadPageState extends ConsumerState<UploadPage> {
 
                   const SizedBox(height: 24),
                   
-                  _buildLabel('Thumbnail (Optional)'),
+                  // --- DYNAMIC THUMBNAIL PREVIEW ---
+                  _buildLabel('Thumbnail'),
                   GestureDetector(
                     onTap: uploadState.isLoading ? null : _pickThumbnail,
-                    child: Container(
-                      height: 140,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      // Dynamic Height: Taller for Shorts (9:16), Shorter for Normal (16:9)
+                      height: isVerticalVideo ? 260 : 160,
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white12),
-                        image: _thumbnailFile != null
-                            ? DecorationImage(image: FileImage(_thumbnailFile!), fit: BoxFit.cover)
-                            : null,
+                        // Note: Using a child Image instead of DecorationImage to control fit better
                       ),
+                      clipBehavior: Clip.hardEdge, // Ensure image doesn't bleed
                       child: _thumbnailFile == null
-                          ? const Center(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.image, color: Colors.grey),
-                                  SizedBox(width: 8),
-                                  Text('Upload Cover Image', style: TextStyle(color: Colors.grey)),
-                                ],
-                              ),
+                          ? Center(
+                              child: _isGeneratingThumbnail 
+                                ? const Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                      SizedBox(height: 8),
+                                      Text("Generating...", style: TextStyle(color: Colors.grey, fontSize: 12))
+                                    ],
+                                  )
+                                : const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.image, color: Colors.grey),
+                                      SizedBox(width: 8),
+                                      Text('Tap to Upload Cover', style: TextStyle(color: Colors.grey)),
+                                    ],
+                                  ),
                             )
                           : Stack(
+                              fit: StackFit.expand,
                               children: [
+                                // Use BoxFit.contain to show FULL image (no cropping)
+                                // Use BoxFit.cover if you want to fill the box (but might crop)
+                                // For Shorts, BoxFit.contain with a black bg is safest.
+                                Image.file(
+                                  _thumbnailFile!, 
+                                  fit: isVerticalVideo ? BoxFit.contain : BoxFit.cover,
+                                ),
+                                
                                 Positioned(
                                   top: 8, right: 8,
                                   child: Container(
@@ -318,7 +429,16 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                                     decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
                                     child: const Icon(Icons.edit, color: Colors.white, size: 16),
                                   ),
-                                )
+                                ),
+                                if (_isGeneratingThumbnail == false && _thumbnailFile != null)
+                                  Positioned(
+                                    bottom: 8, left: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                                      child: const Text("Cover Image", style: TextStyle(color: Colors.white70, fontSize: 10)),
+                                    ),
+                                  )
                               ],
                             ),
                     ),
@@ -346,7 +466,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           ),
         ),
 
-        // --- LOADING OVERLAY ---
         if (uploadState.isLoading)
           Container(
             color: Colors.black.withOpacity(0.8),
@@ -365,14 +484,12 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Loading Circle
                     const SizedBox(
                       height: 50, width: 50,
                       child: CircularProgressIndicator(strokeWidth: 3, color: Colors.blueAccent),
                     ),
                     const SizedBox(height: 24),
                     
-                    // Status Text
                     Text(
                       uploadState.successMessage ?? 'Processing...',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -385,9 +502,8 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                     ),
                     const SizedBox(height: 20),
                     
-                    // Linear Progress Bar
                     LinearProgressIndicator(
-                      value: uploadState.progress / 100, // Normalized 0.0 to 1.0
+                      value: uploadState.progress / 100,
                       minHeight: 8,
                       borderRadius: BorderRadius.circular(4),
                       backgroundColor: Colors.grey[800],
@@ -395,7 +511,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                     ),
                     const SizedBox(height: 8),
                     
-                    // Percentage Text
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
@@ -407,12 +522,10 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                     const SizedBox(height: 20),
                     const Divider(color: Colors.white10),
                     
-                    // --- CANCEL BUTTON ---
                     TextButton.icon(
                       onPressed: uploadState.isCancelling 
                         ? null 
                         : () {
-                           // Call Cancel Logic
                            ref.read(uploadProvider.notifier).cancelUpload();
                         },
                       icon: uploadState.isCancelling 

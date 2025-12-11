@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // <--- ADD THIS IMPORT
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/models/status.dart'; 
 import 'package:ofgconnects_mobile/presentation/pages/following_page.dart';
@@ -20,12 +20,11 @@ import 'package:ofgconnects_mobile/presentation/pages/search_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/user_profile_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/create_status_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/status_view_page.dart';
+import 'package:ofgconnects_mobile/presentation/pages/edit_profile_page.dart'; // <--- ADDED
 
-// --- ADD THIS PROVIDER DEFINITION ---
 final routerProvider = Provider<GoRouter>((ref) {
   return router;
 });
-// ------------------------------------
 
 final router = GoRouter(
   initialLocation: '/',
@@ -122,6 +121,10 @@ final router = GoRouter(
              final statuses = state.extra as List<Status>; 
              return StatusViewPage(statuses: statuses);
           },
+        ),
+        GoRoute(
+          path: '/edit-profile', // <--- REGISTERED
+          builder: (context, state) => const EditProfilePage(),
         ),
       ],
     ),

@@ -31,6 +31,8 @@ dependencies:
   # --- 5. VIDEO PLAYER ---
   video_player: ^2.8.6
   chewie: ^1.8.1
+  video_thumbnail: ^0.5.3  # <--- ADD THIS
+  path_provider: ^2.1.2    # <--- ADD THIS
   
   # --- 6. UTILITIES ---
   intl: ^0.19.0
@@ -39,6 +41,7 @@ dependencies:
 
   # --- 7. MONETIZATION (ADDED) ---
   google_mobile_ads: ^5.1.0
+  cached_network_image: ^3.4.1
 
 dependency_overrides:
   flutter_web_auth_2: ^4.1.0
@@ -52,3 +55,5 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/logo.png  # <--- ADD THIS LINE
+    - assets/logoH.png

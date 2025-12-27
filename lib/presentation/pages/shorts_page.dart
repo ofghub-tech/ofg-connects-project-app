@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:intl/intl.dart';
 
 import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
@@ -41,7 +40,6 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
     super.dispose();
   }
 
-  // --- Animation Logic ---
   void _animateToNextPage() {
     _pageController.nextPage(
       duration: const Duration(milliseconds: 300),
@@ -71,7 +69,6 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
                 scrollDirection: Axis.vertical,
                 allowImplicitScrolling: false, 
                 physics: const ClampingScrollPhysics(),
-                // Infinite scroll via modulo
                 onPageChanged: (index) {
                   final int realIndex = index % state.items.length;
                   ref.read(activeShortsIndexProvider.notifier).state = realIndex;
@@ -102,23 +99,17 @@ class _ShortsItem extends ConsumerWidget {
   final int index;
   final VoidCallback onNextPressed;
 
-  const _ShortsItem({
-    required this.video, 
-    required this.index,
-    required this.onNextPressed,
-  });
+  const _ShortsItem({required this.video, required this.index, required this.onNextPressed});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isLiked = ref.watch(isLikedProvider(video.id)).valueOrNull ?? false;
     final isSaved = ref.watch(isSavedProvider(video.id)).valueOrNull ?? false;
     final isFollowing = ref.watch(isFollowingProvider(video.creatorId)).valueOrNull ?? false;
-
+    
     final double bottomOffset = MediaQuery.of(context).padding.bottom + 20;
 
     return Stack(
       children: [
-        // VIDEO
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -126,15 +117,9 @@ class _ShortsItem extends ConsumerWidget {
               final currentState = ref.read(shortsPlayPauseProvider(video.id));
               ref.read(shortsPlayPauseProvider(video.id).notifier).state = !currentState;
             },
-            child: ShortsPlayer(
-              key: ValueKey(video.id),
-              video: video, 
-              index: index
-            ),
+            child: ShortsPlayer(key: ValueKey(video.id), video: video, index: index),
           ),
         ),
-
-        // GRADIENT
         Positioned.fill(
           child: IgnorePointer(
             child: Container(
@@ -149,48 +134,18 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // ACTION BUTTONS
+        // ACTION BUTTONS (Removed Like Button)
         Positioned(
           right: 12,
           bottom: bottomOffset + 60, 
           child: Column(
             children: [
-              // Next Button
-              _InteractionButton(
-                icon: Icons.keyboard_arrow_down_rounded,
-                label: "Next",
-                onTap: onNextPressed,
-                iconSize: 34,
-              ),
+              _InteractionButton(icon: Icons.keyboard_arrow_down_rounded, label: "Next", onTap: onNextPressed, iconSize: 34),
               const SizedBox(height: 18),
-              
-              // Like Button
-              _InteractionButton(
-                icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                label: NumberFormat.compact().format(video.likeCount),
-                color: isLiked ? Colors.red : Colors.white,
-                // [FIXED] Pass type: 'shorts' here!
-                onTap: () => ref.read(isLikedProvider(video.id).notifier).toggle(type: 'shorts'),
-              ),
+              _InteractionButton(icon: Icons.chat_bubble_outline, label: "Comments", onTap: () => _showComments(context, video.id)),
               const SizedBox(height: 18),
-              
-              // Comments Button
-              _InteractionButton(
-                icon: Icons.chat_bubble_outline,
-                label: "Comments",
-                onTap: () => _showComments(context, video.id),
-              ),
+              _InteractionButton(icon: Icons.share_outlined, label: "Share", onTap: () => Share.share("Watch: ${video.title}\nhttps://ofgconnects.com/shorts?id=${video.id}")),
               const SizedBox(height: 18),
-              
-              // Share Button
-              _InteractionButton(
-                icon: Icons.share_outlined,
-                label: "Share",
-                onTap: () => Share.share("Watch: ${video.title}\nhttps://ofgconnects.com/shorts?id=${video.id}"),
-              ),
-              const SizedBox(height: 18),
-              
-              // Save Button
               _InteractionButton(
                 icon: isSaved ? Icons.bookmark : Icons.bookmark_outline,
                 label: isSaved ? "Saved" : "Save",
@@ -217,7 +172,7 @@ class _ShortsItem extends ConsumerWidget {
                     backgroundColor: Colors.blueAccent,
                     child: Text(
                       video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : '?', 
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -233,20 +188,13 @@ class _ShortsItem extends ConsumerWidget {
                     isFollowing: isFollowing,
                     onTap: () {
                       final notifier = ref.read(subscriptionNotifierProvider.notifier);
-                      isFollowing 
-                        ? notifier.unfollowUser(video.creatorId)
-                        : notifier.followUser(creatorId: video.creatorId, creatorName: video.creatorName);
+                      isFollowing ? notifier.unfollowUser(video.creatorId) : notifier.followUser(creatorId: video.creatorId, creatorName: video.creatorName);
                     },
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              Text(
-                video.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              ),
+              Text(video.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 14)),
             ],
           ),
         ),
@@ -279,14 +227,8 @@ class _FollowButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: isFollowing ? Colors.white.withOpacity(0.2) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          isFollowing ? "Following" : "Follow",
-          style: TextStyle(color: isFollowing ? Colors.white : Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
-        ),
+        decoration: BoxDecoration(color: isFollowing ? Colors.white.withOpacity(0.2) : Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Text(isFollowing ? "Following" : "Follow", style: TextStyle(color: isFollowing ? Colors.white : Colors.black, fontSize: 11, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -299,13 +241,7 @@ class _InteractionButton extends StatelessWidget {
   final Color color;
   final double iconSize;
 
-  const _InteractionButton({
-    required this.icon, 
-    required this.label, 
-    required this.onTap, 
-    this.color = Colors.white,
-    this.iconSize = 28,
-  });
+  const _InteractionButton({required this.icon, required this.label, required this.onTap, this.color = Colors.white, this.iconSize = 28});
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,4 @@
+// lib/presentation/pages/watch_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -54,7 +55,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   @override
   Widget build(BuildContext context) {
     final videoAsync = ref.watch(videoDetailsProvider(widget.videoId));
-    final isLiked = ref.watch(isLikedProvider(widget.videoId)).value ?? false;
     final isSaved = ref.watch(isSavedProvider(widget.videoId)).value ?? false;
 
     return Scaffold(
@@ -90,7 +90,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: Text("${NumberFormat.compact().format(video.viewCount)} views • ${timeago.format(video.createdAt)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       ),
-                      _buildActionRow(video, isLiked, isSaved),
+                      _buildActionRow(video, isSaved), // Removed isLiked
                       const Divider(color: Colors.white10),
                       _buildCreatorRow(video, isFollowing),
                       const Divider(color: Colors.white10),
@@ -113,15 +113,12 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     );
   }
 
-  Widget _buildActionRow(model.Video video, bool isLiked, bool isSaved) {
+  Widget _buildActionRow(model.Video video, bool isSaved) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          _actionBtn(isLiked ? Icons.thumb_up : Icons.thumb_up_outlined, video.likeCount.toString(), isLiked, 
-            () => ref.read(isLikedProvider(widget.videoId).notifier).toggle()),
-          const SizedBox(width: 8),
           _actionBtn(Icons.share_outlined, "Share", false, 
             () => Share.share("Check this out: ${video.title}\n${video.videoUrl}")),
           const SizedBox(width: 8),
@@ -134,7 +131,10 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
   Widget _buildCreatorRow(model.Video video, bool isFollowing) {
     return ListTile(
-      leading: CircleAvatar(backgroundColor: Colors.blueAccent, child: Text(video.creatorName[0])),
+      leading: CircleAvatar(
+        backgroundColor: Colors.blueAccent, 
+        child: Text(video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : 'U')
+      ),
       title: Text(video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       trailing: ElevatedButton(
         onPressed: () => isFollowing 
@@ -173,8 +173,18 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(color: active ? Colors.white24 : Colors.white12, borderRadius: BorderRadius.circular(20)),
-        child: Row(children: [Icon(icon, size: 18, color: active ? Colors.blueAccent : Colors.white), const SizedBox(width: 8), Text(label, style: const TextStyle(color: Colors.white, fontSize: 13))]),
+        decoration: BoxDecoration(
+          color: active ? Colors.blueAccent.withOpacity(0.2) : Colors.white12, 
+          borderRadius: BorderRadius.circular(20),
+          border: active ? Border.all(color: Colors.blueAccent.withOpacity(0.5)) : null,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: active ? Colors.blueAccent : Colors.white), 
+            const SizedBox(width: 8), 
+            Text(label, style: TextStyle(color: active ? Colors.blueAccent : Colors.white, fontSize: 13, fontWeight: active ? FontWeight.bold : FontWeight.normal))
+          ]
+        ),
       ),
     );
   }

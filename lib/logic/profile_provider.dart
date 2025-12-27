@@ -6,7 +6,7 @@ import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
-// --- 1. VIDEOS TAB (Long form, excludes shorts) ---
+// --- 1. VIDEOS TAB (Long form, excludes shorts and music) ---
 final otherUserLongVideosProvider = StateNotifierProvider.family<OtherUserContentNotifier, PaginationState<Video>, String>((ref, userId) {
   return OtherUserContentNotifier(ref, userId: userId, categoryFilter: 'videos');
 });
@@ -32,7 +32,7 @@ class OtherUserContentNotifier extends PaginatedListNotifier<Video> {
 
   @override
   Future<List<Document>> fetchPage(List<String> queries) async {
-    // 1. Get Current User ID to check if "It's Me"
+    // 1. Get Current User ID to check if viewing own profile
     final currentUser = ref.read(authProvider).user;
     final isMe = currentUser?.$id == userId;
 
@@ -41,8 +41,8 @@ class OtherUserContentNotifier extends PaginatedListNotifier<Video> {
       Query.orderDesc('\$createdAt'),
     ];
 
-    // 2. LOGIC FIX: 
-    // If it is NOT me (Public view) -> Show ONLY Approved.
+    // 2. VISIBILITY LOGIC: 
+    // If it is NOT me (Public view) -> Show ONLY Approved videos.
     // If it IS me (Owner view) -> Show EVERYTHING (Approved + Pending + Rejected).
     if (!isMe) {
       filterQueries.add(Query.equal('adminStatus', 'approved'));
@@ -55,8 +55,10 @@ class OtherUserContentNotifier extends PaginatedListNotifier<Video> {
       // Checks for 'music' OR 'song' OR 'songs'
       filterQueries.add(Query.equal('category', ['music', 'song', 'songs']));
     } else {
-      // For standard 'Videos' tab, exclude shorts
+      // For standard 'Videos' tab, exclude shorts and music to prevent duplicates
       filterQueries.add(Query.notEqual('category', 'shorts'));
+      filterQueries.add(Query.notEqual('category', 'music'));
+      filterQueries.add(Query.notEqual('category', 'song'));
     }
 
     final response = await ref.read(databasesProvider).listDocuments(

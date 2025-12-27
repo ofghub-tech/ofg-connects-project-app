@@ -6,7 +6,8 @@ import 'package:ofgconnects_mobile/logic/profile_provider.dart';
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; 
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
+import 'package:ofgconnects_mobile/models/video.dart';
 
 class UserProfilePage extends ConsumerStatefulWidget {
   final String userId;
@@ -26,7 +27,6 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     
-    // Fetch data for all 3 tabs immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(otherUserLongVideosProvider(widget.userId).notifier).fetchFirstBatch();
       ref.read(otherUserSongsProvider(widget.userId).notifier).fetchFirstBatch();
@@ -45,7 +45,6 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
     final currentUser = ref.watch(authProvider).user;
     final isMe = currentUser?.$id == widget.userId;
 
-    // Get Display Name
     final videosState = ref.watch(otherUserLongVideosProvider(widget.userId));
     String displayName = widget.initialName ?? 'User';
     
@@ -70,7 +69,11 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.blueAccent.withOpacity(0.2), Theme.of(context).scaffoldBackgroundColor]),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter, 
+                      end: Alignment.bottomCenter, 
+                      colors: [Colors.blueAccent.withOpacity(0.2), Theme.of(context).scaffoldBackgroundColor]
+                    ),
                   ),
                   child: SafeArea(
                     child: Column(
@@ -85,13 +88,15 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
                               : null,
                           child: (isMe && currentUser?.prefs.data['avatar'] != null)
                               ? null
-                              : Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U', style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
+                              : Text(
+                                  displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U', 
+                                  style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)
+                                ),
                         ),
                         const SizedBox(height: 12),
                         Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                         const SizedBox(height: 16),
                         
-                        // Stats
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -108,7 +113,6 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
                         ),
                         const SizedBox(height: 24), 
                         
-                        // Action Button
                         if (isMe)
                           SizedBox(
                             height: 36,
@@ -139,7 +143,12 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
                                   }
                                   ref.invalidate(otherUserStatsProvider(widget.userId));
                                 },
-                                style: ElevatedButton.styleFrom(backgroundColor: isFollowing ? Colors.grey[800] : Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isFollowing ? Colors.grey[800] : Colors.blueAccent, 
+                                  foregroundColor: Colors.white, 
+                                  padding: const EdgeInsets.symmetric(horizontal: 32), 
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
+                                ),
                                 child: Text(isFollowing ? 'Following' : 'Follow'),
                               ),
                             ),
@@ -168,9 +177,24 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildVideoList(ref, otherUserLongVideosProvider(widget.userId), isMe ? "You haven't uploaded any videos." : "No videos yet."),
-            _buildVideoList(ref, otherUserSongsProvider(widget.userId), isMe ? "You haven't uploaded any songs." : "No songs yet."),
-            _buildShortsGrid(ref, otherUserShortsProvider(widget.userId), isMe ? "You haven't uploaded any shorts." : "No shorts yet."),
+            _buildVideoList(
+              ref, 
+              otherUserLongVideosProvider(widget.userId), 
+              isMe,
+              isMe ? "You haven't uploaded any videos." : "No videos yet."
+            ),
+            _buildVideoList(
+              ref, 
+              otherUserSongsProvider(widget.userId), 
+              isMe,
+              isMe ? "You haven't uploaded any songs." : "No songs yet."
+            ),
+            _buildShortsGrid(
+              ref, 
+              otherUserShortsProvider(widget.userId), 
+              isMe,
+              isMe ? "You haven't uploaded any shorts." : "No shorts yet."
+            ),
           ],
         ),
       ),
@@ -178,10 +202,16 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
   }
 
   Widget _buildStat(String value, String label) {
-    return Column(mainAxisSize: MainAxisSize.min, children: [Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)), Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey))]);
+    return Column(
+      mainAxisSize: MainAxisSize.min, 
+      children: [
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)), 
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey))
+      ]
+    );
   }
 
-  Widget _buildVideoList(WidgetRef ref, ProviderListenable<PaginationState<dynamic>> provider, String emptyMsg) {
+  Widget _buildVideoList(WidgetRef ref, ProviderListenable<PaginationState<Video>> provider, bool isMe, String emptyMsg) {
     final state = ref.watch(provider);
     final videos = state.items;
 
@@ -200,13 +230,37 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
         itemCount: videos.length + (state.hasMore ? 1 : 0), 
         itemBuilder: (context, index) { 
           if (index == videos.length) return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())); 
-          return VideoCard(video: videos[index]); 
+          
+          final video = videos[index];
+
+          // Wrap with a stack to show status badges if isMe is true
+          return Stack(
+            children: [
+              VideoCard(video: video),
+              if (isMe && video.adminStatus != 'approved')
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: video.adminStatus == 'pending' ? Colors.orange : Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      video.adminStatus.toUpperCase(),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+            ],
+          );
         }
       ),
     );
   }
 
-  Widget _buildShortsGrid(WidgetRef ref, ProviderListenable<PaginationState<dynamic>> provider, String emptyMsg) {
+  Widget _buildShortsGrid(WidgetRef ref, ProviderListenable<PaginationState<Video>> provider, bool isMe, String emptyMsg) {
     final state = ref.watch(provider);
     final videos = state.items;
 
@@ -233,11 +287,30 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> with SingleTi
           final video = videos[index];
           return GestureDetector(
             onTap: () => context.push('/shorts?id=${video.id}'), 
-            child: Container(
-              color: Colors.grey[900],
-              child: video.thumbnailUrl.isNotEmpty 
-                ? CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover)
-                : const Icon(Icons.play_circle_outline, color: Colors.white54),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Container(
+                  color: Colors.grey[900],
+                  child: video.thumbnailUrl.isNotEmpty 
+                    ? CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover)
+                    : const Icon(Icons.play_circle_outline, color: Colors.white54),
+                ),
+                if (isMe && video.adminStatus != 'approved')
+                  Container(
+                    color: Colors.black45,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        color: video.adminStatus == 'pending' ? Colors.orange : Colors.red,
+                        child: Text(
+                          video.adminStatus.toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           );
         },

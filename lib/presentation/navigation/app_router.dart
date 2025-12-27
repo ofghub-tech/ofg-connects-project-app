@@ -9,9 +9,7 @@ import 'package:ofgconnects_mobile/presentation/pages/watch_page.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/auth_gate.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/main_app_shell.dart';
 
-// --- Page Imports ---
 import 'package:ofgconnects_mobile/presentation/pages/history_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/liked_videos_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/watch_later_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/upload_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/bible_page.dart';
@@ -22,9 +20,7 @@ import 'package:ofgconnects_mobile/presentation/pages/create_status_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/status_view_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/edit_profile_page.dart';
 
-final routerProvider = Provider<GoRouter>((ref) {
-  return router;
-});
+final routerProvider = Provider<GoRouter>((ref) => router);
 
 final router = GoRouter(
   initialLocation: '/',
@@ -33,20 +29,10 @@ final router = GoRouter(
       path: '/',
       builder: (context, state) => const AuthGate(),
     ),
-
-    // ShellRoute wraps the main tabs with the Navigation Bar
     ShellRoute(
-      builder: (context, state, child) {
-        return MainAppShell(child: child);
-      },
+      builder: (context, state, child) => MainAppShell(child: child),
       routes: [
-        // Tab 1: Home
-        GoRoute(
-          path: '/home',
-          builder: (context, state) => const HomePage(),
-        ), // <--- Removed the nested 'watch' route from here
-
-        // Tab 2: Shorts
+        GoRoute(path: '/home', builder: (context, state) => const HomePage()),
         GoRoute(
           path: '/shorts',
           builder: (context, state) {
@@ -54,80 +40,31 @@ final router = GoRouter(
             return ShortsPage(videoId: videoId);
           },
         ),
-        // Tab 3: Upload
-        GoRoute(
-          path: '/upload',
-          builder: (context, state) => const UploadPage(),
-        ),
-        // Tab 4: Following
-        GoRoute(
-          path: '/following',
-          builder: (context, state) => const FollowingPage(),
-        ),
-        // Tab 5: My Space
-        GoRoute(
-          path: '/myspace',
-          builder: (context, state) => const MySpacePage(),
-        ),
-
-        // --- GLOBAL ROUTES (Accessible from anywhere) ---
-        
-        // FIX: Moved Watch Page here so path is '/watch/:videoId'
+        GoRoute(path: '/upload', builder: (context, state) => const UploadPage()),
+        GoRoute(path: '/following', builder: (context, state) => const FollowingPage()),
+        GoRoute(path: '/myspace', builder: (context, state) => const MySpacePage()),
         GoRoute(
           path: '/watch/:videoId',
-          builder: (context, state) {
-            final videoId = state.pathParameters['videoId']!;
-            return WatchPage(videoId: videoId);
-          },
+          builder: (context, state) => WatchPage(videoId: state.pathParameters['videoId']!),
         ),
-
-        GoRoute(
-          path: '/history',
-          builder: (context, state) => const HistoryPage(),
-        ),
-        GoRoute(
-          path: '/liked',
-          builder: (context, state) => const LikedVideosPage(),
-        ),
-        GoRoute(
-          path: '/watchlater',
-          builder: (context, state) => const WatchLaterPage(),
-        ),
-        GoRoute(
-          path: '/bible',
-          builder: (context, state) => const BiblePage(),
-        ),
-        GoRoute(
-          path: '/settings',
-          builder: (context, state) => const SettingsPage(),
-        ),
-        GoRoute(
-          path: '/search',
-          builder: (context, state) => const SearchPage(),
-        ),
+        GoRoute(path: '/history', builder: (context, state) => const HistoryPage()),
+        GoRoute(path: '/watchlater', builder: (context, state) => const WatchLaterPage()),
+        GoRoute(path: '/bible', builder: (context, state) => const BiblePage()),
+        GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
+        GoRoute(path: '/search', builder: (context, state) => const SearchPage()),
         GoRoute(
           path: '/profile/:userId',
-          builder: (context, state) {
-            final userId = state.pathParameters['userId']!;
-            final name = state.uri.queryParameters['name'];
-            return UserProfilePage(userId: userId, initialName: name);
-          },
+          builder: (context, state) => UserProfilePage(
+            userId: state.pathParameters['userId']!,
+            initialName: state.uri.queryParameters['name'],
+          ),
         ),
-        GoRoute(
-          path: '/create-status',
-          builder: (context, state) => const CreateStatusPage(),
-        ),
+        GoRoute(path: '/create-status', builder: (context, state) => const CreateStatusPage()),
         GoRoute(
           path: '/view-status',
-          builder: (context, state) {
-             final statuses = state.extra as List<Status>; 
-             return StatusViewPage(statuses: statuses);
-          },
+          builder: (context, state) => StatusViewPage(statuses: state.extra as List<Status>),
         ),
-        GoRoute(
-          path: '/edit-profile',
-          builder: (context, state) => const EditProfilePage(),
-        ),
+        GoRoute(path: '/edit-profile', builder: (context, state) => const EditProfilePage()),
       ],
     ),
   ],

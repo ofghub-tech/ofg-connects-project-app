@@ -1,7 +1,7 @@
+// lib/logic/video_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart'; 
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
@@ -91,8 +91,6 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
 // --- 3. SPECIFIC PROVIDERS ---
 final databasesProvider = Provider((ref) => AppwriteClient.databases);
 
-// NOTE: ShortsListNotifier removed from here (It is now in shorts_provider.dart)
-
 class VideosListNotifier extends PaginatedListNotifier<Video> {
   VideosListNotifier(super.ref) { fetchFirstBatch(); }
   @override Video fromDocument(Document doc) => Video.fromAppwrite(doc);
@@ -138,7 +136,7 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
       Query.equal('userId', user.$id), Query.orderDesc('\$createdAt'), ...queries])).documents;
   }
 }
-final paginatedLikedVideosProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdLikes));
+// REMOVED: paginatedLikedVideosProvider
 final paginatedHistoryProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdHistory));
 final paginatedWatchLaterProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdWatchLater));
 
@@ -147,7 +145,6 @@ final videoDetailsProvider = FutureProvider.family<Video, String>((ref, videoId)
   return Video.fromAppwrite(doc);
 });
 
-// FIX: Added query to EXCLUDE shorts from suggestions
 final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref, currentVideoId) async {
   final response = await ref.watch(databasesProvider).listDocuments(
     databaseId: AppwriteClient.databaseId,

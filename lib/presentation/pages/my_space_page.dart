@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
+import 'package:ofgconnects_mobile/logic/profile_provider.dart'; 
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
 
 class MySpacePage extends ConsumerStatefulWidget {
   const MySpacePage({super.key});
@@ -20,7 +22,16 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); 
+    _tabController = TabController(length: 4, vsync: this); 
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        ref.read(otherUserLongVideosProvider(user.$id).notifier).fetchFirstBatch();
+        ref.read(otherUserSongsProvider(user.$id).notifier).fetchFirstBatch();
+        ref.read(otherUserShortsProvider(user.$id).notifier).fetchFirstBatch();
+      }
+    });
   }
 
   @override
@@ -41,7 +52,7 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: 450.0, // Generous height
+              expandedHeight: 450.0,
               pinned: true,
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               title: innerBoxIsScrolled ? Text(user?.name ?? 'My Space') : null,
@@ -63,14 +74,11 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                       colors: [Colors.blueAccent.withOpacity(0.15), Theme.of(context).scaffoldBackgroundColor],
                     ),
                   ),
-                  // --- SAFE AREA WRAPPER ---
                   child: SafeArea(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 20), // Top spacing inside Safe Area
-                        
-                        // Avatar
+                        const SizedBox(height: 20),
                         CircleAvatar(
                           radius: 50,
                           backgroundColor: Colors.blueAccent,
@@ -84,20 +92,13 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                           ),
                         ),
                         const SizedBox(height: 12),
-                        
-                        // Name
                         Text(user?.name ?? 'Guest', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                        
-                        // Bio
                         if (bio.isNotEmpty) 
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8), 
                             child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis)
                           ),
-                        
                         const SizedBox(height: 16),
-                        
-                        // Stats
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -106,10 +107,7 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                             _buildStatItem('Following', '${ref.watch(followingCountProvider).asData?.value ?? 0}'),
                           ],
                         ),
-                        
                         const SizedBox(height: 24),
-
-                        // Edit Profile Button
                         if (!isGuest)
                           SizedBox(
                             height: 36,
@@ -123,7 +121,6 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                               child: const Text("Edit Profile"),
                             ),
                           ),
-                        
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -138,6 +135,7 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
                 unselectedLabelColor: Colors.grey,
                 tabs: const [
                   Tab(text: 'Videos'),
+                  Tab(text: 'Songs'),
                   Tab(text: 'Shorts'),
                   Tab(text: 'Library'),
                 ],
@@ -148,8 +146,9 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildMyVideosTab(ref),
-            _buildMyShortsTab(ref), 
+            _buildMyContentList(ref, otherUserLongVideosProvider(user?.$id ?? ''), 'No videos yet.'),
+            _buildMyContentList(ref, otherUserSongsProvider(user?.$id ?? ''), 'No songs yet.'),
+            _buildMyShortsGrid(ref, otherUserShortsProvider(user?.$id ?? ''), 'No shorts yet.'), 
             _buildMyLibraryTab(),
           ],
         ),
@@ -161,21 +160,17 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
     return Column(mainAxisSize: MainAxisSize.min, children: [Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)), Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey))]);
   }
 
-  // --- 1. LONG VIDEOS TAB ---
-  Widget _buildMyVideosTab(WidgetRef ref) {
-    final state = ref.watch(paginatedUserLongVideosProvider);
+  Widget _buildMyContentList(WidgetRef ref, ProviderListenable<PaginationState<Video>> provider, String emptyMsg) {
+    final state = ref.watch(provider);
     final videos = state.items;
 
-    if (videos.isEmpty && state.isLoadingMore) {
-      Future.microtask(() => ref.read(paginatedUserLongVideosProvider.notifier).fetchFirstBatch());
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (videos.isEmpty) return const Center(child: Padding(padding: EdgeInsets.only(bottom: 100), child: Text('No videos yet.', style: TextStyle(color: Colors.white54))));
+    if (videos.isEmpty && state.isLoadingMore) return const Center(child: CircularProgressIndicator());
+    if (videos.isEmpty) return Center(child: Text(emptyMsg, style: const TextStyle(color: Colors.white54)));
 
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification scrollInfo) {
         if (!state.isLoadingMore && state.hasMore && scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
-          ref.read(paginatedUserLongVideosProvider.notifier).fetchMore();
+          ref.read(provider as dynamic).notifier.fetchMore();
         }
         return false;
       },
@@ -184,62 +179,90 @@ class _MySpacePageState extends ConsumerState<MySpacePage> with SingleTickerProv
         itemCount: videos.length + (state.hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == videos.length) return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
-          return VideoCard(video: videos[index]);
-        },
-      ),
-    );
-  }
-
-  // --- 2. SHORTS TAB (Grid View) ---
-  Widget _buildMyShortsTab(WidgetRef ref) {
-    final state = ref.watch(paginatedUserShortsProvider);
-    final videos = state.items;
-
-    if (videos.isEmpty && state.isLoadingMore) {
-      Future.microtask(() => ref.read(paginatedUserShortsProvider.notifier).fetchFirstBatch());
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (videos.isEmpty) return const Center(child: Padding(padding: EdgeInsets.only(bottom: 100), child: Text('No shorts yet.', style: TextStyle(color: Colors.white54))));
-
-    return NotificationListener<ScrollNotification>(
-      onNotification: (ScrollNotification scrollInfo) {
-        if (!state.isLoadingMore && state.hasMore && scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
-          ref.read(paginatedUserShortsProvider.notifier).fetchMore();
-        }
-        return false;
-      },
-      child: GridView.builder(
-        padding: const EdgeInsets.all(2),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3, 
-          childAspectRatio: 9 / 16,
-          crossAxisSpacing: 2,
-          mainAxisSpacing: 2,
-        ),
-        itemCount: videos.length,
-        itemBuilder: (context, index) {
+          
           final video = videos[index];
-          return GestureDetector(
-            onTap: () => context.push('/shorts?id=${video.id}'), 
-            child: Container(
-              color: Colors.grey[900],
-              child: video.thumbnailUrl.isNotEmpty 
-                ? CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover)
-                : const Icon(Icons.play_circle_outline, color: Colors.white54),
-            ),
+          return Stack(
+            children: [
+              VideoCard(video: video),
+              if (video.adminStatus != 'approved')
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: video.adminStatus == 'pending' ? Colors.orange : Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      video.adminStatus.toUpperCase(),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),
     );
   }
 
-  // --- 3. LIBRARY TAB ---
+  Widget _buildMyShortsGrid(WidgetRef ref, ProviderListenable<PaginationState<Video>> provider, String emptyMsg) {
+    final state = ref.watch(provider);
+    final videos = state.items;
+
+    if (videos.isEmpty && state.isLoadingMore) return const Center(child: CircularProgressIndicator());
+    if (videos.isEmpty) return Center(child: Text(emptyMsg, style: const TextStyle(color: Colors.white54)));
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(2),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, 
+        childAspectRatio: 9 / 16,
+        crossAxisSpacing: 2,
+        mainAxisSpacing: 2,
+      ),
+      itemCount: videos.length,
+      itemBuilder: (context, index) {
+        final video = videos[index];
+        return GestureDetector(
+          onTap: () => context.push('/shorts?id=${video.id}'), 
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(
+                color: Colors.grey[900],
+                child: video.thumbnailUrl.isNotEmpty 
+                  ? CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover)
+                  : const Icon(Icons.play_circle_outline, color: Colors.white54),
+              ),
+              if (video.adminStatus != 'approved')
+                Container(
+                  color: Colors.black45,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      color: video.adminStatus == 'pending' ? Colors.orange : Colors.red,
+                      child: Text(
+                        video.adminStatus.toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // --- REMOVED LIKED VIDEOS FROM HERE ---
   Widget _buildMyLibraryTab() {
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 100),
       children: [
         _buildMenuTile(context, 'History', Icons.history, '/history'),
-        _buildMenuTile(context, 'Liked Videos', Icons.thumb_up_outlined, '/liked'),
         _buildMenuTile(context, 'Watch Later', Icons.watch_later_outlined, '/watchlater'),
       ],
     );

@@ -1,16 +1,20 @@
-import 'dart:io';
+// lib/presentation/pages/watch_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:appwrite/appwrite.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
+import 'package:media_kit/media_kit.dart';       
+import 'package:media_kit_video/media_kit_video.dart'; 
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart'; // <--- IMPORT THIS
 
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
-import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects_mobile/logic/interaction_provider.dart'; 
+import 'package:ofgconnects_mobile/logic/subscription_provider.dart'; 
+import 'package:ofgconnects_mobile/models/video.dart' as model; 
+import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
+import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
   final String videoId;
@@ -21,127 +25,250 @@ class WatchPage extends ConsumerStatefulWidget {
 }
 
 class _WatchPageState extends ConsumerState<WatchPage> {
-  VideoPlayerController? _videoPlayerController;
-  ChewieController? _chewieController;
+  late final Player _player;
+  late final VideoController _controller;
   bool _isPlayerInitialized = false;
-
-  int? _localViewCount; 
+  bool _isDescriptionExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    _checkSavedStatus();
-    _logView();
+    _player = Player();
+    _controller = VideoController(_player);
+    // Log view using the provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(interactionProvider).logVideoView(widget.videoId);
+    });
   }
 
   @override
   void dispose() {
-    _videoPlayerController?.dispose();
-    _chewieController?.dispose();
+    _player.dispose();
     super.dispose();
   }
 
-  Future<void> _checkSavedStatus() async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return;
-    try {
-      final response = await ref.read(databasesProvider).listDocuments(
-        databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdWatchLater,
-        queries: [Query.equal('userId', user.$id), Query.equal('videoId', widget.videoId), Query.limit(1)],
-      );
-      // Logic for saved status UI would go here
-    } catch (e) { print("Watch Later Check Failed: $e"); }
+  String _getStreamingUrl(String url) {
+    String finalUrl = url;
+    if (!finalUrl.startsWith('http')) {
+      finalUrl = AppwriteClient.storage.getFileView(
+        bucketId: AppwriteClient.bucketIdVideos,
+        fileId: url,
+      ).toString();
+    }
+    if (finalUrl.contains('localhost')) finalUrl = finalUrl.replaceFirst('localhost', '10.0.2.2');
+    if (!finalUrl.startsWith('http')) finalUrl = 'http://$finalUrl';
+    return finalUrl;
   }
 
-  Future<void> _logView() async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return; 
+  Future<void> _initializePlayer(model.Video video, {String? specificUrl}) async {
+    if (_isPlayerInitialized && specificUrl == null) return;
     try {
-      final databases = ref.read(databasesProvider);
-      final historyCheck = await databases.listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdHistory, queries: [Query.equal('userId', user.$id), Query.equal('videoId', widget.videoId), Query.limit(1)]);
-      if (historyCheck.total > 0) return;
-      await databases.createDocument(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdHistory, documentId: ID.unique(), data: {'userId': user.$id, 'videoId': widget.videoId});
-      final doc = await databases.getDocument(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, documentId: widget.videoId);
-      final newCount = (doc.data['view_count'] ?? 0) + 1;
-      await databases.updateDocument(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, documentId: widget.videoId, data: {'view_count': newCount});
-      if (mounted) setState(() => _localViewCount = newCount);
-    } catch (e) { print("View Log Failed: $e"); }
-  }
-
-  // --- FIXED: Use networkUrl directly for HLS/MP4 streams ---
-  Future<void> _initializePlayer(Video video) async {
-    if (_isPlayerInitialized) return;
-    try {
-      VideoPlayerController controller;
+      String playUrl = specificUrl ?? (video.compressionStatus == 'Done' 
+          ? video.url720p ?? video.url480p ?? video.url1080p ?? video.url360p ?? video.videoUrl
+          : video.videoUrl);
       
-      // Determine the best URL to play
-      String playUrl = video.videoUrl; // Default to raw
-      if (video.compressionStatus == 'Done') {
-        // Prefer highest quality available for Watch Page
-        playUrl = video.url1080p ?? video.url720p ?? video.url480p ?? video.url360p ?? video.videoUrl;
-      }
-
-      controller = VideoPlayerController.networkUrl(Uri.parse(playUrl));
-      
-      await controller.initialize();
-      _videoPlayerController = controller;
-      _chewieController = ChewieController(
-        videoPlayerController: _videoPlayerController!,
-        autoPlay: true,
-        aspectRatio: _videoPlayerController!.value.aspectRatio,
-        materialProgressColors: ChewieProgressColors(playedColor: Colors.blueAccent),
-      );
+      await _player.open(Media(_getStreamingUrl(playUrl)));
       if (mounted) setState(() => _isPlayerInitialized = true);
-    } catch (e) { print("Player Init Error: $e"); }
+    } catch (e) {
+      debugPrint("Player Init Error: $e");
+    }
+  }
+
+  // Helper for Sharing
+  void _shareVideo(model.Video video) {
+    // Construct a deep link (assuming you will have one later) or just a message
+    final String message = "Check out this video on OFG Connects!\n\n"
+        "${video.title}\n"
+        "https://ofgconnects.com/watch/${video.id}"; // Example URL
+    Share.share(message);
+  }
+
+  Widget _buildActionButton(IconData icon, String label, VoidCallback onTap, {bool isActive = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: isActive ? Colors.blueAccent : Colors.white),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: isActive ? Colors.blueAccent : Colors.white, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final videoAsync = ref.watch(videoDetailsProvider(widget.videoId));
+    final suggestedAsync = ref.watch(suggestedVideosProvider(widget.videoId));
+    
+    // WATCH THE NEW OPTIMISTIC PROVIDERS
+    final isLikedAsync = ref.watch(isLikedProvider(widget.videoId));
+    final isSavedAsync = ref.watch(isSavedProvider(widget.videoId));
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
-      body: videoAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
-        data: (video) {
-          if (!_isPlayerInitialized) Future.microtask(() => _initializePlayer(video));
-          return Column(
-            children: [
-              Container(
-                color: Colors.black, 
-                child: SafeArea(
-                  bottom: false, 
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9, 
+      body: SafeArea(
+        child: videoAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Center(child: Text("Error: $err", style: const TextStyle(color: Colors.white))),
+          data: (video) {
+            final isFollowingAsync = ref.watch(isFollowingProvider(video.creatorId));
+
+            if (video.adminStatus != 'approved') {
+              return const Center(child: Text("Video unavailable", style: TextStyle(color: Colors.white)));
+            }
+            if (!_isPlayerInitialized) Future.microtask(() => _initializePlayer(video));
+
+            return Column(
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    color: Colors.black,
                     child: _isPlayerInitialized 
-                      ? Chewie(controller: _chewieController!) 
-                      : const Center(child: CircularProgressIndicator())
-                  )
-                )
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                        ? Video(controller: _controller, controls: MaterialVideoControls)
+                        : const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(video.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                        const SizedBox(height: 8),
-                        Text('${NumberFormat.compact().format(_localViewCount ?? video.viewCount)} views', style: const TextStyle(color: Colors.grey)),
-                        const SizedBox(height: 16),
-                        Row(children: [CircleAvatar(radius: 18, backgroundColor: Colors.grey[800], child: Text(video.creatorName[0].toUpperCase())), const SizedBox(width: 12), Text(video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]),
-                        const SizedBox(height: 16),
-                        Text(video.description, style: const TextStyle(color: Colors.white70)),
+                        Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(video.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text('${NumberFormat.compact().format(video.viewCount)} views', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                  const SizedBox(width: 8),
+                                  Text('•  ${DateFormat.yMMMd().format(video.createdAt)}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  CircleAvatar(backgroundColor: Colors.grey[800], radius: 18, child: Text(video.creatorName.isNotEmpty ? video.creatorName[0] : '?', style: const TextStyle(color: Colors.white))),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: Text(video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15))),
+                                  isFollowingAsync.when(
+                                    data: (isFollowing) => SizedBox(
+                                      height: 32,
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          final notifier = ref.read(subscriptionNotifierProvider.notifier);
+                                          if (isFollowing) notifier.unfollowUser(video.creatorId);
+                                          else notifier.followUser(creatorId: video.creatorId, creatorName: video.creatorName);
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isFollowing ? Colors.white.withOpacity(0.1) : Colors.white,
+                                          foregroundColor: isFollowing ? Colors.white : Colors.black,
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        ),
+                                        child: Text(isFollowing ? "Subscribed" : "Subscribe"),
+                                      ),
+                                    ),
+                                    loading: () => const SizedBox.shrink(),
+                                    error: (_,__) => const SizedBox.shrink(),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          child: Row(
+                            children: [
+                              // OPTIMISTIC LIKE
+                              _buildActionButton(
+                                isLikedAsync.valueOrNull == true ? Icons.thumb_up : Icons.thumb_up_outlined, 
+                                NumberFormat.compact().format(video.likeCount), 
+                                () => ref.read(isLikedProvider(video.id).notifier).toggle(), // NEW CALL
+                                isActive: isLikedAsync.valueOrNull == true
+                              ),
+                              const SizedBox(width: 10),
+                              
+                              // SHARE BUTTON
+                              _buildActionButton(Icons.share_outlined, "Share", () => _shareVideo(video)),
+                              const SizedBox(width: 10),
+                              
+                              // OPTIMISTIC SAVE
+                              _buildActionButton(
+                                isSavedAsync.valueOrNull == true ? Icons.bookmark : Icons.bookmark_outline, 
+                                "Save", 
+                                () => ref.read(isSavedProvider(video.id).notifier).toggle(), // NEW CALL
+                                isActive: isSavedAsync.valueOrNull == true
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Divider(color: Colors.white10),
+
+                        Padding(
+                           padding: const EdgeInsets.symmetric(horizontal: 12),
+                           child: InkWell(
+                             onTap: () => setState(() => _isDescriptionExpanded = !_isDescriptionExpanded),
+                             child: Container(
+                               width: double.infinity,
+                               padding: const EdgeInsets.all(12),
+                               decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+                               child: Column(
+                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                 children: [
+                                   Text(video.description.isEmpty ? "No description" : video.description, maxLines: _isDescriptionExpanded ? null : 2, overflow: _isDescriptionExpanded ? TextOverflow.visible : TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                   if (!_isDescriptionExpanded && video.description.isNotEmpty) const Text("...more", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))
+                                 ],
+                               ),
+                             ),
+                           ),
+                        ),
+                        
+                        ListTile(
+                          onTap: () => showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => DraggableScrollableSheet(
+                              initialChildSize: 0.75,
+                              maxChildSize: 0.9,
+                              builder: (_, controller) => CommentsSheet(videoId: video.id, scrollController: controller),
+                            ),
+                          ),
+                          title: const Text("Comments", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          trailing: const Icon(Icons.unfold_more, color: Colors.white, size: 20),
+                        ),
+                        
+                        suggestedAsync.when(
+                          data: (videos) => Column(children: videos.map((v) => SuggestedVideoCard(video: v)).toList()),
+                          loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+                          error: (e, s) => const SizedBox(),
+                        ),
+                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

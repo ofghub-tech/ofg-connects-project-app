@@ -10,6 +10,9 @@ import 'package:ofgconnects_mobile/logic/status_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/status_bubble.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/feed_ad_card.dart';
 
+// --- ADD THIS IMPORT ---
+import 'package:ofgconnects_mobile/logic/shorts_provider.dart'; 
+
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -33,6 +36,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     _shortsScrollController.addListener(() {
       if (_shortsScrollController.position.pixels >= _shortsScrollController.position.maxScrollExtent - 100) {
+        // This will now work correctly
         ref.read(shortsListProvider.notifier).fetchMore();
       }
     });
@@ -52,7 +56,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _onRefresh() async {
-    // Wait for all feeds to refresh their data
+    // Adding the import fixes the 'List<dynamic>' vs 'Iterable<Future>' error 
+    // because the compiler now knows these functions return Futures
     await Future.wait([
       ref.read(videosListProvider.notifier).refresh(),
       ref.read(shortsListProvider.notifier).refresh(),
@@ -62,12 +67,12 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // This will now find the getter correctly
     final shortsState = ref.watch(shortsListProvider);
     final videosState = ref.watch(videosListProvider);
     final statusState = ref.watch(statusProvider);
     final currentUser = ref.watch(authProvider).user;
 
-    // Defined here so it can be used in childCount
     const int frequency = 2; 
 
     return Scaffold(
@@ -75,13 +80,12 @@ class _HomePageState extends ConsumerState<HomePage> {
         onRefresh: _onRefresh,
         color: Colors.blueAccent,
         backgroundColor: const Color(0xFF1E1E1E),
-        edgeOffset: 60, // Pushes the spinner down below the AppBar
+        edgeOffset: 60, 
         child: CustomScrollView(
           controller: _scrollController,
           physics: const BouncingScrollPhysics(),
           slivers: [
-            
-            // --- 0. STATUS SECTION ---
+            // ... (Rest of your UI code remains exactly the same)
             SliverToBoxAdapter(
               child: SizedBox(
                 height: 135,
@@ -144,8 +148,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ),
-
-            // --- 1. Shorts Section ---
             SliverToBoxAdapter(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,8 +209,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ],
               ),
             ),
-
-            // --- 2. Videos List with ADS ---
             if (videosState.items.isEmpty && videosState.isLoadingMore)
               const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
             else if (videosState.items.isEmpty)
@@ -222,7 +222,6 @@ class _HomePageState extends ConsumerState<HomePage> {
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    // indices
                     int videoIndex = index - (index ~/ (frequency + 1));
                     bool isAdSlot = (index + 1) % (frequency + 1) == 0;
 

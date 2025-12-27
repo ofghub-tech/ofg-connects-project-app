@@ -1,3 +1,4 @@
+// lib/presentation/widgets/main_app_shell.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +7,6 @@ import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
 class MainAppShell extends ConsumerStatefulWidget {
   final Widget child;
-
   const MainAppShell({super.key, required this.child});
 
   @override
@@ -64,7 +64,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       _bibleButtonPosition = Offset(screenSize.width - 72, screenSize.height - 160);
     }
 
-    // Dimensions for the 3D Pop-out effect
     const double navBarHeight = 70;
     const double navBarBottomMargin = 24;
     const double logoBottomPos = 35; 
@@ -88,12 +87,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         child: Container(color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.7)),
                       ),
                     ),
-                    
-                    // --- UPDATED: Tap to Navigate Home ---
                     title: GestureDetector(
-                      onTap: () {
-                        context.go('/home'); // <-- Functionality Added Here
-                      },
+                      onTap: () => context.go('/home'),
                       child: const Padding(
                         padding: EdgeInsets.only(left: 8.0),
                         child: Text(
@@ -108,8 +103,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       ),
                     ),
                     centerTitle: false,
-                    // -------------------------------------
-
                     actions: [
                       if (isGuest)
                         TextButton(
@@ -165,72 +158,71 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
           ),
         ),
 
-        // --- CUSTOM FLOATING NAVIGATION BAR ---
-        Positioned(
-          left: 0, 
-          right: 0, 
-          bottom: 0,
-          child: SizedBox(
-            height: 140, 
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.bottomCenter,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(left: 16, right: 16, bottom: navBarBottomMargin),
-                  height: navBarHeight,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(35),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(35),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        color: const Color(0xFF1E1E1E).withOpacity(0.85),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildNavItem(context, Icons.home_rounded, Icons.home_outlined, 0, selectedIndex, ref),
-                            _buildNavItem(context, Icons.play_arrow_rounded, Icons.play_arrow_outlined, 1, selectedIndex, ref),
-                            
-                            const SizedBox(width: 60),
-
-                            _buildNavItem(context, Icons.people_rounded, Icons.people_outline, 3, selectedIndex, ref),
-                            _buildNavItem(context, Icons.person_rounded, Icons.person_outline, 4, selectedIndex, ref),
-                          ],
+        // CUSTOM FLOATING NAVIGATION BAR - Hidden on Shorts
+        if (!isShortsPage)
+          Positioned(
+            left: 0, 
+            right: 0, 
+            bottom: 0,
+            child: SizedBox(
+              height: 140, 
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.bottomCenter,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(left: 16, right: 16, bottom: navBarBottomMargin),
+                    height: navBarHeight,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(35),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(35),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          color: const Color(0xFF1E1E1E).withOpacity(0.85),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildNavItem(context, Icons.home_rounded, Icons.home_outlined, 0, selectedIndex, ref),
+                              _buildNavItem(context, Icons.play_arrow_rounded, Icons.play_arrow_outlined, 1, selectedIndex, ref),
+                              const SizedBox(width: 60),
+                              _buildNavItem(context, Icons.people_rounded, Icons.people_outline, 3, selectedIndex, ref),
+                              _buildNavItem(context, Icons.person_rounded, Icons.person_outline, 4, selectedIndex, ref),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-
-                Positioned(
-                  bottom: logoBottomPos,
-                  child: GestureDetector(
-                    onTap: () => _onItemTapped(2, context, ref),
-                    child: Container(
-                      width: logoSize, 
-                      height: logoSize,
-                      child: Image.asset(
-                        'assets/logo.png', 
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => 
-                          const Icon(Icons.add_circle, size: 60, color: Colors.blueAccent),
+                  Positioned(
+                    bottom: logoBottomPos,
+                    child: GestureDetector(
+                      onTap: () => _onItemTapped(2, context, ref),
+                      child: SizedBox(
+                        width: logoSize, 
+                        height: logoSize,
+                        child: Image.asset(
+                          'assets/logo.png', 
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => 
+                            const Icon(Icons.add_circle, size: 60, color: Colors.blueAccent),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
 
-        if (selectedIndex != 1) 
+        // DRAGGABLE BIBLE BUTTON - Hidden on Shorts
+        if (!isShortsPage) 
           Positioned(
             left: _bibleButtonPosition!.dx,
             top: _bibleButtonPosition!.dy,

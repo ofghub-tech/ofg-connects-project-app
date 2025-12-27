@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:async'; // Required for Completer/Cancel
+import 'dart:async'; 
 import 'dart:typed_data';
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +12,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 // --- STATE CLASS ---
 class UploadState {
   final bool isLoading;
-  final double progress; // 0.0 to 100.0
+  final double progress; 
   final String? error;
   final String? successMessage;
   final bool isCancelling;
@@ -32,12 +32,10 @@ class UploadNotifier extends StateNotifier<UploadState> {
   
   final Ref ref;
   
-  // Track keys for cleanup if upload fails or is cancelled
   String? _currentBucket;
   String? _currentKey;
   bool _cancelRequested = false;
 
-  // --- R2 CONFIG ---
   Minio _getR2Client() {
     final endpoint = dotenv.env['R2_ENDPOINT']!.replaceAll('https://', '');
     return Minio(
@@ -49,13 +47,10 @@ class UploadNotifier extends StateNotifier<UploadState> {
     );
   }
 
-  // --- 1. SANITIZE FILENAME (Matches Web Logic) ---
   String _sanitizeFilename(String filename) {
-    // Replaces non-alphanumeric (except . and -) with _
     return filename.replaceAll(RegExp(r'[^a-zA-Z0-9\.\-]'), '_');
   }
 
-  // --- 2. UPLOAD HELPER ---
   Future<String> _uploadToR2({
     required Minio minio,
     required File file,
@@ -70,11 +65,9 @@ class UploadNotifier extends StateNotifier<UploadState> {
     final cleanName = _sanitizeFilename(rawFilename);
     final objectKey = '${fileId}_$cleanName';
 
-    // Store for cleanup
     _currentBucket = bucketName;
     _currentKey = objectKey;
 
-    // HTTPS Safety
     String finalDomain = domainUrl;
     if (!finalDomain.startsWith('http')) {
       finalDomain = 'https://$finalDomain';
@@ -89,10 +82,9 @@ class UploadNotifier extends StateNotifier<UploadState> {
       stream,
       size: fileSize,
       onProgress: (bytes) {
-        if (_cancelRequested) return; // Stop updating if cancelled
+        if (_cancelRequested) return; 
 
         if (isVideo) {
-          // Calculate percentage exactly like Web: (loaded / total) * 100
           double percent = (bytes / fileSize) * 100;
           state = UploadState(
             isLoading: true,
@@ -108,18 +100,15 @@ class UploadNotifier extends StateNotifier<UploadState> {
     return '$finalDomain/$objectKey';
   }
 
-  // --- 3. CLEANUP HELPER ---
   Future<void> _deleteFromR2(String bucket, String key) async {
     try {
       final minio = _getR2Client();
-      print("Cleaning up file: $key from $bucket");
       await minio.removeObject(bucket, key);
     } catch (e) {
       print("Failed to cleanup R2 file: $e");
     }
   }
 
-  // --- 4. EXTRACT KEY HELPER ---
   String? _getKeyFromUrl(String url) {
     try {
       return url.split('/').last;
@@ -128,18 +117,12 @@ class UploadNotifier extends StateNotifier<UploadState> {
     }
   }
 
-  // --- PUBLIC: CANCEL UPLOAD ---
   Future<void> cancelUpload() async {
     if (!state.isLoading) return;
-
     _cancelRequested = true;
     state = UploadState(isLoading: true, isCancelling: true, error: "Cancelling...");
-    
-    // The loop in uploadVideo will catch the exception and trigger cleanup
-    // We strictly handle the cleanup in the catch block below.
   }
 
-  // --- MAIN: UPLOAD VIDEO ---
   Future<void> uploadVideo({
     required File videoFile,
     required File? thumbnailFile,
@@ -148,7 +131,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
     required String category,
     required String tags,
   }) async {
-    _cancelRequested = false; // Reset cancel flag
+    _cancelRequested = false; 
     final user = ref.read(authProvider).user;
     
     if (user == null) {
@@ -156,7 +139,6 @@ class UploadNotifier extends StateNotifier<UploadState> {
       return;
     }
 
-    // Validation (Matches Web 5GB limit)
     const MAX_SIZE = 5 * 1024 * 1024 * 1024; 
     if (await videoFile.length() > MAX_SIZE) {
       state = UploadState(error: "Video too large (Max 5GB).");
@@ -167,13 +149,13 @@ class UploadNotifier extends StateNotifier<UploadState> {
 
     String? uploadedVideoUrl;
     String? uploadedThumbUrl;
+    String? thumbFileId; // Variable to store the specific ID
     final minio = _getR2Client();
 
     try {
       final uniqueId = ID.unique();
 
-      // --- STEP 1: UPLOAD VIDEO (Temp Bucket) ---
-      // No compression, just like Web
+      // --- STEP 1: UPLOAD VIDEO ---
       uploadedVideoUrl = await _uploadToR2(
         minio: minio,
         file: videoFile,
@@ -183,16 +165,19 @@ class UploadNotifier extends StateNotifier<UploadState> {
         isVideo: true
       );
 
-      // --- STEP 2: UPLOAD THUMBNAIL (Main Bucket) ---
+      // --- STEP 2: UPLOAD THUMBNAIL (Auto or Custom) ---
       if (thumbnailFile != null && !_cancelRequested) {
         state = UploadState(isLoading: true, progress: 100, successMessage: "Uploading Thumbnail...");
+        
+        // FIX: Explicitly set the thumbnail ID so we can save it to DB
+        thumbFileId = '${uniqueId}_thumb'; 
         
         uploadedThumbUrl = await _uploadToR2(
           minio: minio,
           file: thumbnailFile,
           bucketName: dotenv.env['R2_BUCKET_ID']!,
           domainUrl: dotenv.env['R2_MAIN_DOMAIN']!,
-          fileId: '${uniqueId}_thumb',
+          fileId: thumbFileId, 
           isVideo: false
         );
       }
@@ -209,7 +194,6 @@ class UploadNotifier extends StateNotifier<UploadState> {
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdVideos,
         documentId: uniqueId,
-        // Matches Web Code Data Structure Exactly
         data: {
           'title': title,
           'description': description,
@@ -218,18 +202,18 @@ class UploadNotifier extends StateNotifier<UploadState> {
           'category': category,
           'tags': tags.trim(),
           
-          // --- UPDATED: Save Raw Video to video_url ---
           'video_url': uploadedVideoUrl, 
-          'url_360p': null, // Initialize compressed URL as null
+          'url_360p': null,
           
           'thumbnailUrl': uploadedThumbUrl,
+          'thumbnailId': thumbFileId, // <--- FIXED: Now storing the ID
+          
           'adminStatus': 'pending',
-          'compressionStatus': 'Processing', // Set to Processing so app knows to use video_url
+          'compressionStatus': 'Processing',
           'sourceFileId': videoKey,
           'likeCount': 0,
           'commentCount': 0,
           'view_count': 0,
-          // No createdAt (System handles it)
         },
         permissions: [
           Permission.read(Role.any()),
@@ -238,27 +222,21 @@ class UploadNotifier extends StateNotifier<UploadState> {
         ]
       );
 
-      // Success
       uploadedVideoUrl = null; 
       uploadedThumbUrl = null;
-      _currentKey = null; // Clear cleanup reference
+      _currentKey = null;
 
       state = UploadState(isLoading: false, progress: 100, successMessage: "Video Uploaded Successfully!");
 
     } catch (e) {
-      // --- ERROR & CLEANUP HANDLER ---
       print("Upload Error/Cancel: $e");
-      
       String msg = e.toString().contains("Cancelled") ? "Upload Cancelled" : "Upload Failed: ${e.toString()}";
       state = UploadState(isLoading: false, error: msg);
 
-      // Execute Cleanup
       if (uploadedVideoUrl != null) {
         final key = _getKeyFromUrl(uploadedVideoUrl!);
         if (key != null) await _deleteFromR2(dotenv.env['R2_TEMP_BUCKET_NAME']!, key);
-      }
-      // If we failed mid-upload, use the tracked keys
-      else if (_currentBucket != null && _currentKey != null) {
+      } else if (_currentBucket != null && _currentKey != null) {
         await _deleteFromR2(_currentBucket!, _currentKey!);
       }
       

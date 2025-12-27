@@ -4,9 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ofgconnects_mobile/logic/profile_provider.dart';
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
-// REMOVED: guest_login_dialog import
 
 class UserProfilePage extends ConsumerStatefulWidget {
   final String userId;
@@ -48,6 +46,8 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     final videosState = ref.watch(otherUserVideosProvider(widget.userId));
     final statsAsync = ref.watch(otherUserStatsProvider(widget.userId));
     final isFollowingAsync = ref.watch(isFollowingProvider(widget.userId));
+    
+    // Determine Display Name
     String displayName = widget.initialName ?? 'User';
     if (videosState.items.isNotEmpty) displayName = videosState.items.first.creatorName;
 
@@ -92,29 +92,17 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                           height: 40, 
                           child: ElevatedButton(
                             onPressed: () async {
-                              // REMOVED GUEST CHECK
                               final notifier = ref.read(subscriptionNotifierProvider.notifier);
                               if (isFollowing) {
                                 notifier.unfollowUser(widget.userId);
                               } else {
-                                // FIXED: Added compressionStatus: 'Done'
-                                final dummyVideo = Video(
-                                  id: '', 
-                                  title: '', 
-                                  description: '', 
-                                  thumbnailUrl: '', 
-                                  videoUrl: '', 
-                                  compressionStatus: 'Done', // <-- THIS WAS MISSING
-                                  creatorId: widget.userId, 
-                                  creatorName: displayName, 
-                                  category: '', 
-                                  tags: [], 
-                                  viewCount: 0, 
-                                  likeCount: 0, 
-                                  createdAt: DateTime.now()
+                                // --- FIXED: No dummy video needed ---
+                                notifier.followUser(
+                                  creatorId: widget.userId,
+                                  creatorName: displayName,
                                 );
-                                notifier.followUser(dummyVideo);
                               }
+                              // Refresh stats to show new follower count immediately
                               ref.invalidate(otherUserStatsProvider(widget.userId));
                             },
                             style: ElevatedButton.styleFrom(backgroundColor: isFollowing ? Colors.grey[800] : Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),

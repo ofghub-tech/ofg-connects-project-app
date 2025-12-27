@@ -3,12 +3,11 @@ import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/models/video.dart';
 
-// Import the *existing* databasesProvider from video_provider.dart
+// Import the *existing* databasesProvider
 import 'package:ofgconnects_mobile/logic/video_provider.dart' show databasesProvider;
 
-// This provider will check if the current user is following a specific creator
+// Check if following
 final isFollowingProvider = FutureProvider.family<bool, String>((ref, creatorId) async {
   final databases = ref.watch(databasesProvider);
   final currentUserId = ref.watch(authProvider).user?.$id;
@@ -27,13 +26,13 @@ final isFollowingProvider = FutureProvider.family<bool, String>((ref, creatorId)
   return response.documents.isNotEmpty;
 });
 
-// This Notifier handles the actions of following and unfollowing
 class SubscriptionNotifier extends StateNotifier<AsyncValue<void>> {
   SubscriptionNotifier(this.ref) : super(const AsyncData(null));
 
   final Ref ref;
 
-  Future<void> followUser(Video video) async {
+  // --- CHANGED: Now accepts ID and Name directly (No Video object needed) ---
+  Future<void> followUser({required String creatorId, required String creatorName}) async {
     state = const AsyncLoading();
     final currentUserId = ref.read(authProvider).user?.$id;
     if (currentUserId == null) {
@@ -49,17 +48,17 @@ class SubscriptionNotifier extends StateNotifier<AsyncValue<void>> {
         documentId: ID.unique(),
         data: {
           'followerId': currentUserId,
-          'followingId': video.creatorId,
-          'followingUsername': video.creatorName,
+          'followingId': creatorId,
+          'followingUsername': creatorName,
         },
       );
       state = const AsyncData(null);
     } catch (e, s) {
       state = AsyncError(e, s);
     }
-    // Refresh the providers to update the UI
-    ref.invalidate(isFollowingProvider(video.creatorId));
-    // --- REFRESH COUNTS ---
+    
+    // Refresh UI
+    ref.invalidate(isFollowingProvider(creatorId));
     ref.invalidate(followerCountProvider);
     ref.invalidate(followingCountProvider);
   }
@@ -74,7 +73,6 @@ class SubscriptionNotifier extends StateNotifier<AsyncValue<void>> {
 
     final databases = ref.read(databasesProvider);
     try {
-      // First, find the subscription document
       final response = await databases.listDocuments(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdSubscriptions,
@@ -96,53 +94,48 @@ class SubscriptionNotifier extends StateNotifier<AsyncValue<void>> {
     } catch (e, s) {
       state = AsyncError(e, s);
     }
-    // Refresh the providers to update the UI
+    
+    // Refresh UI
     ref.invalidate(isFollowingProvider(creatorId));
-    // --- REFRESH COUNTS ---
     ref.invalidate(followerCountProvider);
     ref.invalidate(followingCountProvider);
   }
 }
 
-// The provider for our notifier
 final subscriptionNotifierProvider =
     StateNotifierProvider<SubscriptionNotifier, AsyncValue<void>>((ref) {
   return SubscriptionNotifier(ref);
 });
 
-// --- ADDED BACK: PROVIDERS FOR STATS ---
+// --- STATS PROVIDERS ---
 
-// 1. Provider to get the user's FOLLOWER count
 final followerCountProvider = FutureProvider<int>((ref) async {
   final databases = ref.watch(databasesProvider);
   final user = ref.watch(authProvider).user;
   if (user == null) return 0;
 
-  // This logic is based on your web app's subscriptions collection
   final response = await databases.listDocuments(
     databaseId: AppwriteClient.databaseId,
     collectionId: AppwriteClient.collectionIdSubscriptions,
     queries: [
-      Query.equal('followingId', user.$id), // Count where others are following YOU
-      Query.limit(0), // We only need the 'total'
+      Query.equal('followingId', user.$id), 
+      Query.limit(0), 
     ],
   );
   return response.total;
 });
 
-// 2. Provider to get the user's FOLLOWING count
 final followingCountProvider = FutureProvider<int>((ref) async {
   final databases = ref.watch(databasesProvider);
   final user = ref.watch(authProvider).user;
   if (user == null) return 0;
 
-  // This logic is based on your web app's subscriptions collection
   final response = await databases.listDocuments(
     databaseId: AppwriteClient.databaseId,
     collectionId: AppwriteClient.collectionIdSubscriptions,
     queries: [
-      Query.equal('followerId', user.$id), // Count where YOU are the follower
-      Query.limit(0), // We only need the 'total'
+      Query.equal('followerId', user.$id),
+      Query.limit(0),
     ],
   );
   return response.total;

@@ -217,10 +217,14 @@ class UploadNotifier extends StateNotifier<UploadState> {
           'username': user.name,
           'category': category,
           'tags': tags.trim(),
-          'url_4k': uploadedVideoUrl,
+          
+          // --- UPDATED: Save Raw Video to video_url ---
+          'video_url': uploadedVideoUrl, 
+          'url_360p': null, // Initialize compressed URL as null
+          
           'thumbnailUrl': uploadedThumbUrl,
           'adminStatus': 'pending',
-          'compressionStatus': 'waiting',
+          'compressionStatus': 'Processing', // Set to Processing so app knows to use video_url
           'sourceFileId': videoKey,
           'likeCount': 0,
           'commentCount': 0,

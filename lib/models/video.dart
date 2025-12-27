@@ -5,7 +5,16 @@ class Video {
   final String title;
   final String description;
   final String thumbnailUrl;
-  final String videoUrl;
+  
+  final String videoUrl; // Raw file
+  
+  // New Quality Columns
+  final String? url1080p;
+  final String? url720p;
+  final String? url480p;
+  final String? url360p;
+  
+  final String compressionStatus;
   final String creatorId;
   final String creatorName;
   final String category;
@@ -14,7 +23,6 @@ class Video {
   final int likeCount;
   final DateTime createdAt;
 
-  // ... (keep your existing getters and constructor) ...
   String get thumbnailId => thumbnailUrl;
   String get videoId => videoUrl; 
 
@@ -24,6 +32,11 @@ class Video {
     required this.description,
     required this.thumbnailUrl,
     required this.videoUrl,
+    this.url1080p,
+    this.url720p,
+    this.url480p,
+    this.url360p,
+    required this.compressionStatus,
     required this.creatorId,
     required this.creatorName,
     required this.category,
@@ -39,12 +52,16 @@ class Video {
       title: doc.data['title'] ?? 'Untitled',
       description: doc.data['description'] ?? '',
       thumbnailUrl: doc.data['thumbnailUrl'] ?? '',
-      // --- FIX IS HERE ---
-      // Try 'url_4k' first (where the web uploads to). If empty, try 'videoUrl'.
-      videoUrl: (doc.data['url_4k'] != null && doc.data['url_4k'].isNotEmpty)
-          ? doc.data['url_4k']
-          : (doc.data['videoUrl'] ?? ''), 
-      // -------------------
+      
+      videoUrl: doc.data['video_url'] ?? '',
+      
+      // Map the new quality columns
+      url1080p: doc.data['url_1080p'],
+      url720p: doc.data['url_720p'],
+      url480p: doc.data['url_480p'],
+      url360p: doc.data['url_360p'],
+      
+      compressionStatus: doc.data['compressionStatus'] ?? 'Processing',
       creatorId: doc.data['userId'] ?? '',
       creatorName: doc.data['username'] ?? 'Unknown',
       category: doc.data['category'] ?? 'general',

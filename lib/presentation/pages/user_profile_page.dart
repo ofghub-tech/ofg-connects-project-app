@@ -97,7 +97,22 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                               if (isFollowing) {
                                 notifier.unfollowUser(widget.userId);
                               } else {
-                                final dummyVideo = Video(id: '', title: '', description: '', thumbnailUrl: '', videoUrl: '', creatorId: widget.userId, creatorName: displayName, category: '', tags: [], viewCount: 0, likeCount: 0, createdAt: DateTime.now());
+                                // FIXED: Added compressionStatus: 'Done'
+                                final dummyVideo = Video(
+                                  id: '', 
+                                  title: '', 
+                                  description: '', 
+                                  thumbnailUrl: '', 
+                                  videoUrl: '', 
+                                  compressionStatus: 'Done', // <-- THIS WAS MISSING
+                                  creatorId: widget.userId, 
+                                  creatorName: displayName, 
+                                  category: '', 
+                                  tags: [], 
+                                  viewCount: 0, 
+                                  likeCount: 0, 
+                                  createdAt: DateTime.now()
+                                );
                                 notifier.followUser(dummyVideo);
                               }
                               ref.invalidate(otherUserStatsProvider(widget.userId));

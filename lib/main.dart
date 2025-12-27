@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // <--- IMPORT THIS
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:media_kit/media_kit.dart'; // <--- IMPORT THIS
 import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart'; 
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 
@@ -13,20 +14,23 @@ Future<void> main() async {
   // 1. Initialize AdMob (Safe unawaited call)
   MobileAds.instance.initialize();
 
-  // 2. Load Env (Safe Mode)
+  // 2. Initialize MediaKit (REQUIRED for video)
+  MediaKit.ensureInitialized(); 
+
+  // 3. Load Env (Safe Mode)
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     print("Warning: .env file not found. Ensure it exists in assets.");
   }
   
-  // 3. Lock Orientation
+  // 4. Lock Orientation
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // 4. Immersive UI
+  // 5. Immersive UI
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,

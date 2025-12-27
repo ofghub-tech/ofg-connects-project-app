@@ -28,18 +28,21 @@ dependencies:
   flutter_cache_manager: ^3.3.2
   path: ^1.9.0
 
-  # --- 5. VIDEO PLAYER ---
-  video_player: ^2.8.6
-  chewie: ^1.8.1
-  video_thumbnail: ^0.5.3  # <--- ADD THIS
-  path_provider: ^2.1.2    # <--- ADD THIS
+  # --- 5. VIDEO PLAYER (MEDIA KIT) ---
+  # Removed video_player & chewie
+  media_kit: ^1.1.10
+  media_kit_video: ^1.2.4
+  media_kit_libs_video: ^1.0.4 # <--- CRITICAL for VP9 on iOS
+  
+  video_thumbnail: ^0.5.3
+  path_provider: ^2.1.2
   
   # --- 6. UTILITIES ---
   intl: ^0.19.0
   share_plus: ^10.0.0
   cupertino_icons: ^1.0.6
 
-  # --- 7. MONETIZATION (ADDED) ---
+  # --- 7. MONETIZATION ---
   google_mobile_ads: ^5.1.0
   cached_network_image: ^3.4.1
 
@@ -59,5 +62,5 @@ flutter:
   uses-material-design: true
   assets:
     - .env
-    - assets/logo.png  # <--- ADD THIS LINE
+    - assets/logo.png
     - assets/logoH.png

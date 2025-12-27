@@ -6,15 +6,16 @@ class Video {
   final String description;
   final String thumbnailUrl;
   
-  final String videoUrl; // Raw file
+  final String videoUrl; 
   
-  // New Quality Columns
+  // Quality Columns
   final String? url1080p;
   final String? url720p;
   final String? url480p;
   final String? url360p;
   
   final String compressionStatus;
+  final String adminStatus; // <--- ADDED THIS
   final String creatorId;
   final String creatorName;
   final String category;
@@ -37,6 +38,7 @@ class Video {
     this.url480p,
     this.url360p,
     required this.compressionStatus,
+    required this.adminStatus, // <--- ADDED THIS
     required this.creatorId,
     required this.creatorName,
     required this.category,
@@ -52,16 +54,16 @@ class Video {
       title: doc.data['title'] ?? 'Untitled',
       description: doc.data['description'] ?? '',
       thumbnailUrl: doc.data['thumbnailUrl'] ?? '',
-      
       videoUrl: doc.data['video_url'] ?? '',
       
-      // Map the new quality columns
       url1080p: doc.data['url_1080p'],
       url720p: doc.data['url_720p'],
       url480p: doc.data['url_480p'],
       url360p: doc.data['url_360p'],
       
       compressionStatus: doc.data['compressionStatus'] ?? 'Processing',
+      adminStatus: doc.data['adminStatus'] ?? 'pending', // <--- ADDED THIS
+      
       creatorId: doc.data['userId'] ?? '',
       creatorName: doc.data['username'] ?? 'Unknown',
       category: doc.data['category'] ?? 'general',

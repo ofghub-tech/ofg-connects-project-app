@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
+import 'package:media_kit/media_kit.dart';       
+import 'package:media_kit_video/media_kit_video.dart'; 
 import 'package:intl/intl.dart';
 
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/logic/video_provider.dart';
-import 'package:ofgconnects_mobile/models/video.dart';
+// ALIAS THE MODEL TO AVOID CONFLICT
+import 'package:ofgconnects_mobile/models/video.dart' as model; 
 import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
 
@@ -21,11 +22,10 @@ class WatchPage extends ConsumerStatefulWidget {
 }
 
 class _WatchPageState extends ConsumerState<WatchPage> {
-  VideoPlayerController? _videoPlayerController;
-  ChewieController? _chewieController;
-  
+  late final Player _player;
+  late final VideoController _controller;
+
   bool _isPlayerInitialized = false;
-  bool _isInitializing = false; 
   String _currentQualityLabel = "Auto";
   
   bool _isLiked = false;
@@ -38,17 +38,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   @override
   void initState() {
     super.initState();
+    _player = Player();
+    _controller = VideoController(_player);
     _logView();
   }
 
   @override
   void dispose() {
-    _videoPlayerController?.dispose();
-    _chewieController?.dispose();
+    _player.dispose();
     super.dispose();
   }
 
-  // --- URL Helper ---
   String _getStreamingUrl(String url) {
     String finalUrl = url;
     if (!finalUrl.startsWith('http')) {
@@ -101,70 +101,38 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     }
   }
 
-  // --- STRICT PLAYBACK LOGIC ---
-  Future<void> _initializePlayer(Video video, {String? specificUrl, Duration? startAt}) async {
-    if ((_isPlayerInitialized && specificUrl == null) || _isInitializing) return;
-    _isInitializing = true;
+  // Use 'model.Video' here because we aliased the import
+  Future<void> _initializePlayer(model.Video video, {String? specificUrl}) async {
+    if (_isPlayerInitialized && specificUrl == null) return;
 
     try {
       String playUrl;
       
       if (specificUrl != null) {
-        // User selected specific quality
         playUrl = specificUrl;
       } else {
-        // "Auto" Logic
         if (video.compressionStatus == 'Done') {
-          // STRICT RULE: If done, NEVER play raw. Pick best available.
-          // Prioritize 720p for mobile balance, then 480p, then 1080p.
-          playUrl = video.url720p ?? video.url480p ?? video.url1080p ?? video.url360p!; 
+          playUrl = video.url720p ?? 
+                    video.url480p ?? 
+                    video.url1080p ?? 
+                    video.url360p ?? 
+                    video.videoUrl; 
         } else {
-          // STRICT RULE: Only play raw if processing is not done
           playUrl = video.videoUrl;
         }
       }
 
       final finalUrl = _getStreamingUrl(playUrl);
-      debugPrint("Streaming: $finalUrl");
-
-      final newController = VideoPlayerController.networkUrl(Uri.parse(finalUrl));
-      await newController.initialize();
+      await _player.open(Media(finalUrl));
       
-      if (startAt != null) {
-        await newController.seekTo(startAt);
-      }
-
-      _chewieController?.dispose();
-      final oldController = _videoPlayerController;
-      
-      setState(() {
-        _videoPlayerController = newController;
-        _chewieController = ChewieController(
-          videoPlayerController: _videoPlayerController!,
-          autoPlay: true,
-          aspectRatio: 16 / 9,
-          allowFullScreen: true,
-          materialProgressColors: ChewieProgressColors(playedColor: Colors.blueAccent),
-          errorBuilder: (context, errorMessage) {
-            return const Center(child: Text("Playback Error", style: TextStyle(color: Colors.white)));
-          },
-        );
-        _isPlayerInitialized = true;
-      });
-      oldController?.dispose();
-
+      if (mounted) setState(() => _isPlayerInitialized = true);
     } catch (e) {
       debugPrint("Player Init Error: $e");
-    } finally {
-      if (mounted) _isInitializing = false;
     }
   }
 
-  void _showQualitySelector(Video video) {
-    // Only show qualities that actually exist
+  void _showQualitySelector(model.Video video) {
     final Map<String, String?> qualities = {};
-    
-    // Always have "Auto"
     qualities['Auto'] = null;
 
     if (video.compressionStatus == 'Done') {
@@ -172,7 +140,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       if (video.url720p != null) qualities['720p'] = video.url720p;
       if (video.url480p != null) qualities['480p'] = video.url480p;
       if (video.url360p != null) qualities['360p'] = video.url360p;
-      // NOTE: "Original" (Raw) is intentionally OMITTED if compression is Done.
     } else {
       qualities['Original'] = video.videoUrl;
     }
@@ -199,12 +166,8 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                   onTap: () {
                     Navigator.pop(context);
                     if (_currentQualityLabel != entry.key) {
-                      final currentPos = _videoPlayerController?.value.position;
-                      setState(() {
-                        _currentQualityLabel = entry.key;
-                        _isPlayerInitialized = false; 
-                      });
-                      _initializePlayer(video, specificUrl: entry.value, startAt: currentPos);
+                      setState(() => _currentQualityLabel = entry.key);
+                      _initializePlayer(video, specificUrl: entry.value);
                     }
                   },
                 );
@@ -253,7 +216,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => Center(child: Text("Error: $err", style: const TextStyle(color: Colors.white))),
           data: (video) {
-            // --- 1. ADMIN APPROVAL CHECK ---
             if (video.adminStatus != 'approved') {
               return Center(
                 child: Column(
@@ -262,8 +224,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                     const Icon(Icons.lock_clock, size: 60, color: Colors.orange),
                     const SizedBox(height: 16),
                     Text("This video is ${video.adminStatus}.", style: const TextStyle(color: Colors.white, fontSize: 18)),
-                    const SizedBox(height: 8),
-                    const Text("It has not been approved by an admin yet.", style: TextStyle(color: Colors.grey)),
                   ],
                 ),
               );
@@ -281,7 +241,10 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                   child: Container(
                     color: Colors.black,
                     child: _isPlayerInitialized 
-                        ? Chewie(controller: _chewieController!)
+                        ? Video( // THIS IS THE WIDGET
+                            controller: _controller,
+                            controls: MaterialVideoControls, 
+                          )
                         : const Center(child: CircularProgressIndicator()),
                   ),
                 ),
@@ -336,7 +299,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                           ),
                         ),
                         
-                        // Action Bar
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
@@ -353,7 +315,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
                         const Divider(color: Colors.white10),
 
-                        // Comments
                         ListTile(
                           onTap: () => showModalBottomSheet(
                             context: context,
@@ -371,7 +332,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                         
                         const Divider(color: Colors.white10),
 
-                        // Up Next
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                           child: Text("Up Next", style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.white)),

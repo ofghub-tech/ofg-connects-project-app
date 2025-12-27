@@ -6,11 +6,7 @@ import 'package:ofgconnects_mobile/logic/auth_provider.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/animate_in_effect.dart';
-import 'package:ofgconnects_mobile/logic/status_provider.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/status_bubble.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/feed_ad_card.dart';
-
-// --- ADD THIS IMPORT ---
 import 'package:ofgconnects_mobile/logic/shorts_provider.dart'; 
 
 class HomePage extends ConsumerStatefulWidget {
@@ -36,7 +32,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     _shortsScrollController.addListener(() {
       if (_shortsScrollController.position.pixels >= _shortsScrollController.position.maxScrollExtent - 100) {
-        // This will now work correctly
         ref.read(shortsListProvider.notifier).fetchMore();
       }
     });
@@ -44,7 +39,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(shortsListProvider.notifier).fetchFirstBatch();
       ref.read(videosListProvider.notifier).fetchFirstBatch();
-      ref.read(statusProvider.notifier).fetchStatuses();
+      // Status fetch removed
     });
   }
 
@@ -56,23 +51,19 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _onRefresh() async {
-    // Adding the import fixes the 'List<dynamic>' vs 'Iterable<Future>' error 
-    // because the compiler now knows these functions return Futures
     await Future.wait([
       ref.read(videosListProvider.notifier).refresh(),
       ref.read(shortsListProvider.notifier).refresh(),
-      ref.read(statusProvider.notifier).fetchStatuses(),
+      // Status refresh removed
     ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    // This will now find the getter correctly
     final shortsState = ref.watch(shortsListProvider);
     final videosState = ref.watch(videosListProvider);
-    final statusState = ref.watch(statusProvider);
-    final currentUser = ref.watch(authProvider).user;
-
+    // Status watcher removed
+    
     const int frequency = 2; 
 
     return Scaffold(
@@ -85,75 +76,14 @@ class _HomePageState extends ConsumerState<HomePage> {
           controller: _scrollController,
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // ... (Rest of your UI code remains exactly the same)
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 135,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  children: [
-                    GestureDetector(
-                      onTap: () => context.push('/create-status'),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        child: Column(
-                          children: [
-                            Stack(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(shape: BoxShape.circle),
-                                  child: CircleAvatar(
-                                    radius: 33,
-                                    backgroundColor: Colors.grey[800],
-                                    backgroundImage: (currentUser?.prefs.data['avatar'] != null)
-                                      ? NetworkImage(currentUser!.prefs.data['avatar'])
-                                      : null,
-                                    child: (currentUser?.prefs.data['avatar'] == null) 
-                                      ? const Icon(Icons.person, color: Colors.white) : null,
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 0, right: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle),
-                                    child: const Icon(Icons.add, size: 14, color: Colors.white),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            const Text("My Status", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    if (statusState.isLoading && statusState.groupedStatuses.isEmpty)
-                       const Padding(padding: EdgeInsets.only(left:16), child: Center(child: CircularProgressIndicator())),
-                    
-                    ...statusState.groupedStatuses.entries.map((entry) {
-                      if (entry.key == currentUser?.$id) return const SizedBox.shrink();
-                      
-                      return StatusBubble(
-                        statuses: entry.value,
-                        onTap: () {
-                          context.push('/view-status', extra: entry.value);
-                        },
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
-            ),
+            // --- STATUS SECTION REMOVED ---
+
             SliverToBoxAdapter(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 12), // Adjusted top padding
                     child: Row(
                       children: [
                         const Icon(Icons.bolt_rounded, color: Colors.blueAccent),
@@ -232,7 +162,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     }
 
                     if (isAdSlot) {
-                      return FeedAdCard(); 
+                      return const FeedAdCard(); // Added const if applicable
                     }
 
                     return AnimateInEffect(

@@ -5,6 +5,7 @@ class Video {
   final String title;
   final String description;
   final String thumbnailUrl;
+  final String? thumbnailFileId; // <--- ADDED: To store the actual File ID
   
   final String videoUrl; 
   
@@ -15,7 +16,7 @@ class Video {
   final String? url360p;
   
   final String compressionStatus;
-  final String adminStatus; // <--- ADDED THIS
+  final String adminStatus; 
   final String creatorId;
   final String creatorName;
   final String category;
@@ -24,7 +25,6 @@ class Video {
   final int likeCount;
   final DateTime createdAt;
 
-  String get thumbnailId => thumbnailUrl;
   String get videoId => videoUrl; 
 
   Video({
@@ -32,13 +32,14 @@ class Video {
     required this.title,
     required this.description,
     required this.thumbnailUrl,
+    this.thumbnailFileId, // <--- ADDED
     required this.videoUrl,
     this.url1080p,
     this.url720p,
     this.url480p,
     this.url360p,
     required this.compressionStatus,
-    required this.adminStatus, // <--- ADDED THIS
+    required this.adminStatus,
     required this.creatorId,
     required this.creatorName,
     required this.category,
@@ -54,6 +55,7 @@ class Video {
       title: doc.data['title'] ?? 'Untitled',
       description: doc.data['description'] ?? '',
       thumbnailUrl: doc.data['thumbnailUrl'] ?? '',
+      thumbnailFileId: doc.data['thumbnailId'], // <--- ADDED: Read from DB
       videoUrl: doc.data['video_url'] ?? '',
       
       url1080p: doc.data['url_1080p'],
@@ -62,7 +64,7 @@ class Video {
       url360p: doc.data['url_360p'],
       
       compressionStatus: doc.data['compressionStatus'] ?? 'Processing',
-      adminStatus: doc.data['adminStatus'] ?? 'pending', // <--- ADDED THIS
+      adminStatus: doc.data['adminStatus'] ?? 'pending',
       
       creatorId: doc.data['userId'] ?? '',
       creatorName: doc.data['username'] ?? 'Unknown',

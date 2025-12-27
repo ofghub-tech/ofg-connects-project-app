@@ -37,6 +37,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
   bool _cancelRequested = false;
 
   Minio _getR2Client() {
+    // Ensure .env has R2_ENDPOINT defined
     final endpoint = dotenv.env['R2_ENDPOINT']!.replaceAll('https://', '');
     return Minio(
       endPoint: endpoint,
@@ -139,7 +140,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
       return;
     }
 
-    const MAX_SIZE = 5 * 1024 * 1024 * 1024; 
+    const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
     if (await videoFile.length() > MAX_SIZE) {
       state = UploadState(error: "Video too large (Max 5GB).");
       return;
@@ -149,7 +150,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
 
     String? uploadedVideoUrl;
     String? uploadedThumbUrl;
-    String? thumbFileId; // Variable to store the specific ID
+    String? thumbFileId; 
     final minio = _getR2Client();
 
     try {
@@ -165,11 +166,11 @@ class UploadNotifier extends StateNotifier<UploadState> {
         isVideo: true
       );
 
-      // --- STEP 2: UPLOAD THUMBNAIL (Auto or Custom) ---
+      // --- STEP 2: UPLOAD THUMBNAIL ---
       if (thumbnailFile != null && !_cancelRequested) {
         state = UploadState(isLoading: true, progress: 100, successMessage: "Uploading Thumbnail...");
         
-        // FIX: Explicitly set the thumbnail ID so we can save it to DB
+        // Fixed: Ensure we generate an ID for the thumbnail
         thumbFileId = '${uniqueId}_thumb'; 
         
         uploadedThumbUrl = await _uploadToR2(
@@ -206,7 +207,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
           'url_360p': null,
           
           'thumbnailUrl': uploadedThumbUrl,
-          'thumbnailId': thumbFileId, // <--- FIXED: Now storing the ID
+          'thumbnailId': thumbFileId, // Saved correctly
           
           'adminStatus': 'pending',
           'compressionStatus': 'Processing',
@@ -233,6 +234,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
       String msg = e.toString().contains("Cancelled") ? "Upload Cancelled" : "Upload Failed: ${e.toString()}";
       state = UploadState(isLoading: false, error: msg);
 
+      // Cleanup on failure
       if (uploadedVideoUrl != null) {
         final key = _getKeyFromUrl(uploadedVideoUrl!);
         if (key != null) await _deleteFromR2(dotenv.env['R2_TEMP_BUCKET_NAME']!, key);

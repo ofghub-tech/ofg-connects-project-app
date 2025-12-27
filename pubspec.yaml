@@ -46,6 +46,8 @@ dependencies:
   google_mobile_ads: ^5.1.0
   cached_network_image: ^3.4.1
   timeago: ^3.7.1
+  video_player: ^2.10.1
+  chewie: ^1.13.0
 
 dependency_overrides:
   flutter_web_auth_2: ^4.1.0

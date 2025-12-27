@@ -20,7 +20,7 @@ import 'package:ofgconnects_mobile/presentation/pages/search_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/user_profile_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/create_status_page.dart';
 import 'package:ofgconnects_mobile/presentation/pages/status_view_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/edit_profile_page.dart'; // <--- ADDED
+import 'package:ofgconnects_mobile/presentation/pages/edit_profile_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return router;
@@ -44,16 +44,8 @@ final router = GoRouter(
         GoRoute(
           path: '/home',
           builder: (context, state) => const HomePage(),
-          routes: [
-            GoRoute(
-              path: 'watch/:videoId',
-              builder: (context, state) {
-                final videoId = state.pathParameters['videoId']!;
-                return WatchPage(videoId: videoId);
-              },
-            ),
-          ],
-        ),
+        ), // <--- Removed the nested 'watch' route from here
+
         // Tab 2: Shorts
         GoRoute(
           path: '/shorts',
@@ -78,7 +70,17 @@ final router = GoRouter(
           builder: (context, state) => const MySpacePage(),
         ),
 
-        // Other Routes
+        // --- GLOBAL ROUTES (Accessible from anywhere) ---
+        
+        // FIX: Moved Watch Page here so path is '/watch/:videoId'
+        GoRoute(
+          path: '/watch/:videoId',
+          builder: (context, state) {
+            final videoId = state.pathParameters['videoId']!;
+            return WatchPage(videoId: videoId);
+          },
+        ),
+
         GoRoute(
           path: '/history',
           builder: (context, state) => const HistoryPage(),
@@ -123,7 +125,7 @@ final router = GoRouter(
           },
         ),
         GoRoute(
-          path: '/edit-profile', // <--- REGISTERED
+          path: '/edit-profile',
           builder: (context, state) => const EditProfilePage(),
         ),
       ],

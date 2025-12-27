@@ -4,230 +4,189 @@ import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
 import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-// --- FIX IS HERE: Hide the old historyProvider ---
-import 'package:ofgconnects_mobile/logic/video_provider.dart' hide historyProvider; 
-import 'package:ofgconnects_mobile/logic/history_provider.dart';
+import 'package:ofgconnects_mobile/logic/video_provider.dart';
 
+// --- 1. VIEW LOGIC (Kept simple) ---
 final interactionProvider = Provider((ref) => InteractionLogic(ref));
-
-final isLikedProvider = FutureProvider.family<bool, String>((ref, videoId) async {
-  final user = ref.watch(authProvider).user;
-  if (user == null) return false;
-  return ref.read(interactionProvider).checkIfLiked(videoId);
-});
-
-final isSavedProvider = FutureProvider.family<bool, String>((ref, videoId) async {
-  final user = ref.watch(authProvider).user;
-  if (user == null) return false;
-  return ref.read(interactionProvider).isVideoSaved(videoId);
-});
 
 class InteractionLogic {
   final Ref ref;
   final Databases _db = AppwriteClient.databases;
-  
   InteractionLogic(this.ref);
 
-  // --- HISTORY LOGIC ---
-  
   Future<void> logVideoView(String videoId) async {
     final user = ref.read(authProvider).user;
     if (user == null) return;
-
     try {
-      // 1. Check if User already watched this
+      // Check if already viewed
       final check = await _db.listDocuments(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdHistory,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1)
-        ],
+        queries: [Query.equal('userId', user.$id), Query.equal('videoId', videoId), Query.limit(1)],
       );
 
-      if (check.total > 0) {
-        // ALREADY WATCHED: Delete old, Create new (to bump timestamp)
-        try {
-          await _db.deleteDocument(
-            databaseId: AppwriteClient.databaseId,
-            collectionId: AppwriteClient.collectionIdHistory,
-            documentId: check.documents.first.$id,
-          );
-        } catch (e) {
-          print("Error deleting old history: $e");
-        }
-
+      if (check.total == 0) {
+        // Create History Record
         await _db.createDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdHistory,
           documentId: ID.unique(),
-          data: {
-            'userId': user.$id,
-            'videoId': videoId,
-            // No 'createdAt' needed, Appwrite handles $createdAt automatically
-          },
-          permissions: [
-             Permission.read(Role.user(user.$id)),
-             Permission.write(Role.user(user.$id)),
-          ]
+          data: {'userId': user.$id, 'videoId': videoId},
         );
-        
-      } else {
-        // NEW VIEW
-        await _db.createDocument(
-          databaseId: AppwriteClient.databaseId,
-          collectionId: AppwriteClient.collectionIdHistory,
-          documentId: ID.unique(),
-          data: {
-            'userId': user.$id,
-            'videoId': videoId,
-          },
-          permissions: [
-             Permission.read(Role.user(user.$id)),
-             Permission.write(Role.user(user.$id)),
-          ]
-        );
-
-        await _incrementViewCount(videoId);
-      } 
-      
-      // Refresh UI lists
-      ref.invalidate(historyProvider); 
-
+        // Increment View Count
+        _incrementViewCount(videoId);
+      }
     } catch (e) {
-      print("History Log Error: $e");
+      print("View Log Error: $e");
     }
   }
 
   Future<void> _incrementViewCount(String videoId) async {
     try {
-      final videoDoc = await _db.getDocument(
-        databaseId: AppwriteClient.databaseId, 
-        collectionId: AppwriteClient.collectionIdVideos, 
+      final doc = await _db.getDocument(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdVideos,
         documentId: videoId
       );
-      
-      int currentViews = videoDoc.data['view_count'] ?? 0;
-      
+      final current = doc.data['view_count'] ?? 0;
       await _db.updateDocument(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdVideos,
         documentId: videoId,
-        data: { 'view_count': currentViews + 1 },
+        data: {'view_count': current + 1},
       );
-      
+      // Refresh video details silently
       ref.invalidate(videoDetailsProvider(videoId));
+    } catch (_) {}
+  }
+}
+
+// --- 2. OPTIMISTIC LIKE NOTIFIER ---
+final isLikedProvider = StateNotifierProvider.family<LikeNotifier, AsyncValue<bool>, String>((ref, videoId) {
+  return LikeNotifier(ref, videoId);
+});
+
+class LikeNotifier extends StateNotifier<AsyncValue<bool>> {
+  final Ref ref;
+  final String videoId;
+  final Databases _db = AppwriteClient.databases;
+
+  LikeNotifier(this.ref, this.videoId) : super(const AsyncLoading()) {
+    _init();
+  }
+
+  Future<void> _init() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) {
+      state = const AsyncData(false);
+      return;
+    }
+    try {
+      final res = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdLikes,
+        queries: [Query.equal('userId', user.$id), Query.equal('videoId', videoId), Query.limit(1)]
+      );
+      state = AsyncData(res.total > 0);
     } catch (e) {
-       print("Failed to increment view count: $e");
+      state = const AsyncData(false);
     }
   }
 
-  // --- LIKE LOGIC ---
-  Future<bool> checkIfLiked(String videoId) async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return false;
-    try {
-      final response = await _db.listDocuments(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdLikes,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1), 
-        ]
-      );
-      return response.total > 0;
-    } catch (e) { return false; }
-  }
-
-  Future<void> toggleLike(String videoId) async {
+  Future<void> toggle() async {
     final user = ref.read(authProvider).user;
     if (user == null) return;
 
+    // 1. OPTIMISTIC UPDATE (React 1st)
+    final bool currentStatus = state.value ?? false;
+    state = AsyncData(!currentStatus); 
+
+    // 2. SERVER WORK (Work Next)
     try {
       final check = await _db.listDocuments(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdLikes,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1),
-        ],
+        queries: [Query.equal('userId', user.$id), Query.equal('videoId', videoId), Query.limit(1)],
       );
-
-      final videoDoc = await _db.getDocument(
-         databaseId: AppwriteClient.databaseId,
-         collectionId: AppwriteClient.collectionIdVideos,
-         documentId: videoId
-      );
-      int currentLikes = videoDoc.data['likeCount'] ?? 0;
 
       if (check.total > 0) {
-        // Unlike
+        // Unlike on Server
         await _db.deleteDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdLikes,
           documentId: check.documents.first.$id,
         );
-        await _updateVideoField(videoId, 'likeCount', (currentLikes > 0 ? currentLikes - 1 : 0));
+        _updateVideoStat(videoId, -1);
       } else {
-        // Like
+        // Like on Server
         await _db.createDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdLikes,
           documentId: ID.unique(),
-          data: {
-            'userId': user.$id,
-            'videoId': videoId,
-            'type': 'video',
-          },
-          permissions: [
-             Permission.read(Role.any()),
-             Permission.write(Role.user(user.$id)),
-          ]
+          data: {'userId': user.$id, 'videoId': videoId, 'type': 'video'},
         );
-        await _updateVideoField(videoId, 'likeCount', currentLikes + 1);
+        _updateVideoStat(videoId, 1);
       }
-      ref.invalidate(isLikedProvider(videoId));
-      ref.invalidate(videoDetailsProvider(videoId));
-      ref.invalidate(paginatedLikedVideosProvider);
     } catch (e) {
-      print("Like Error: $e");
+      // 3. REVERT IF ERROR
+      print("Like failed: $e");
+      state = AsyncData(currentStatus); 
     }
   }
 
-  // --- WATCH LATER LOGIC ---
-  Future<bool> isVideoSaved(String videoId) async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return false;
+  Future<void> _updateVideoStat(String videoId, int change) async {
     try {
-      final response = await _db.listDocuments(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdWatchLater,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1),
-        ]
-      );
-      return response.total > 0;
-    } catch (_) { return false; }
+      final doc = await _db.getDocument(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, documentId: videoId);
+      final current = doc.data['likeCount'] ?? 0;
+      int newCount = current + change;
+      if (newCount < 0) newCount = 0;
+      await _db.updateDocument(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, documentId: videoId, data: {'likeCount': newCount});
+      ref.invalidate(videoDetailsProvider(videoId)); // Refresh count
+    } catch (_) {}
+  }
+}
+
+// --- 3. OPTIMISTIC SAVE NOTIFIER ---
+final isSavedProvider = StateNotifierProvider.family<SaveNotifier, AsyncValue<bool>, String>((ref, videoId) {
+  return SaveNotifier(ref, videoId);
+});
+
+class SaveNotifier extends StateNotifier<AsyncValue<bool>> {
+  final Ref ref;
+  final String videoId;
+  final Databases _db = AppwriteClient.databases;
+
+  SaveNotifier(this.ref, this.videoId) : super(const AsyncLoading()) {
+    _init();
   }
 
-  Future<void> toggleWatchLater(String videoId) async {
+  Future<void> _init() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) { state = const AsyncData(false); return; }
+    try {
+      final res = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdWatchLater,
+        queries: [Query.equal('userId', user.$id), Query.equal('videoId', videoId), Query.limit(1)]
+      );
+      state = AsyncData(res.total > 0);
+    } catch (e) { state = const AsyncData(false); }
+  }
+
+  Future<void> toggle() async {
     final user = ref.read(authProvider).user;
     if (user == null) return;
 
+    // 1. OPTIMISTIC UPDATE
+    final currentStatus = state.value ?? false;
+    state = AsyncData(!currentStatus);
+
+    // 2. SERVER WORK
     try {
       final check = await _db.listDocuments(
         databaseId: AppwriteClient.databaseId,
         collectionId: AppwriteClient.collectionIdWatchLater,
-        queries: [
-          Query.equal('userId', user.$id),
-          Query.equal('videoId', videoId),
-          Query.limit(1),
-        ],
+        queries: [Query.equal('userId', user.$id), Query.equal('videoId', videoId), Query.limit(1)],
       );
 
       if (check.total > 0) {
@@ -241,31 +200,12 @@ class InteractionLogic {
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdWatchLater,
           documentId: ID.unique(),
-          data: {
-            'userId': user.$id,
-            'videoId': videoId,
-          },
-           permissions: [
-            Permission.read(Role.user(user.$id)),
-            Permission.write(Role.user(user.$id)),
-          ]
+          data: {'userId': user.$id, 'videoId': videoId},
         );
       }
-      ref.invalidate(isSavedProvider(videoId));
       ref.invalidate(paginatedWatchLaterProvider);
     } catch (e) {
-      print("Save Error: $e");
+      state = AsyncData(currentStatus); // Revert
     }
-  }
-
-  Future<void> _updateVideoField(String videoId, String field, int value) async {
-     try {
-      await _db.updateDocument(
-        databaseId: AppwriteClient.databaseId,
-        collectionId: AppwriteClient.collectionIdVideos,
-        documentId: videoId,
-        data: { field: value },
-      );
-    } catch (e) { print("Failed to update video stats: $e"); }
   }
 }

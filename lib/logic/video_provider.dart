@@ -44,16 +44,12 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
 
   Future<void> fetchFirstBatch() async {
     if (state.items.isNotEmpty) return;
-
     state = state.copyWith(isLoadingMore: true, hasMore: true);
     _lastId = null; 
-
     try {
       final documents = await fetchPage([Query.limit(_limit)]);
-      
       final newItems = documents.map(fromDocument).toList();
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
-
       state = state.copyWith(
         items: newItems,
         isLoadingMore: false,
@@ -71,38 +67,20 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
       final documents = await fetchPage([Query.limit(_limit)]);
       final newItems = documents.map(fromDocument).toList();
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
-
-      state = state.copyWith(
-        items: newItems,
-        isLoadingMore: false,
-        hasMore: newItems.length == _limit,
-      );
+      state = state.copyWith(items: newItems, isLoadingMore: false, hasMore: newItems.length == _limit);
     } catch (e) {
       print("Error refreshing: $e");
     }
   }
 
   Future<void> fetchMore() async {
-    if (state.isLoadingMore || !state.hasMore || _lastId == null) {
-      return;
-    }
-
+    if (state.isLoadingMore || !state.hasMore || _lastId == null) return;
     state = state.copyWith(isLoadingMore: true);
-
     try {
-      final documents = await fetchPage([
-        Query.limit(_limit),
-        Query.cursorAfter(_lastId!), 
-      ]);
-
+      final documents = await fetchPage([Query.limit(_limit), Query.cursorAfter(_lastId!)]);
       final newItems = documents.map(fromDocument).toList();
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
-
-      state = state.copyWith(
-        items: [...state.items, ...newItems],
-        isLoadingMore: false,
-        hasMore: newItems.length == _limit,
-      );
+      state = state.copyWith(items: [...state.items, ...newItems], isLoadingMore: false, hasMore: newItems.length == _limit);
     } catch (e) {
       state = state.copyWith(isLoadingMore: false, hasMore: false);
       print("Error fetching more: $e");
@@ -111,158 +89,75 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
 }
 
 // --- 3. SPECIFIC PROVIDERS ---
-
 final databasesProvider = Provider((ref) => AppwriteClient.databases);
 
-// A. SHORTS NOTIFIER (With Deep-Link Support)
-class ShortsListNotifier extends PaginatedListNotifier<Video> {
-  ShortsListNotifier(super.ref);
+// NOTE: ShortsListNotifier removed from here (It is now in shorts_provider.dart)
 
-  @override
-  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
-
-  Future<void> init(String? startWithVideoId) async {
-    // Refresh only if empty or if a specific deep-linked ID is provided
-    if (state.items.isNotEmpty && startWithVideoId == null) return;
-
-    if (startWithVideoId != null) {
-      try {
-        final doc = await ref.read(databasesProvider).getDocument(
-          databaseId: AppwriteClient.databaseId,
-          collectionId: AppwriteClient.collectionIdVideos,
-          documentId: startWithVideoId,
-        );
-        final video = Video.fromAppwrite(doc);
-        
-        state = PaginationState(
-          items: [video],
-          isLoadingMore: true, 
-          hasMore: true,
-        );
-        _lastId = null; 
-        
-        await fetchFirstBatch(); 
-      } catch (e) {
-        print("Error fetching deep linked short: $e");
-        fetchFirstBatch();
-      }
-    } else {
-      fetchFirstBatch();
-    }
-  }
-
-  @override
-  Future<List<Document>> fetchPage(List<String> queries) async {
-    final response = await ref.read(databasesProvider).listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdVideos,
-      queries: [
-        Query.equal('category', 'shorts'),
-        Query.equal('adminStatus', 'approved'),
-        Query.orderDesc('\$createdAt'),
-        ...queries,
-      ],
-    );
-    return response.documents;
-  }
-}
-
-final shortsListProvider = StateNotifierProvider<ShortsListNotifier, PaginationState<Video>>((ref) {
-  return ShortsListNotifier(ref);
-});
-
-// B. NORMAL VIDEOS NOTIFIER
 class VideosListNotifier extends PaginatedListNotifier<Video> {
-  VideosListNotifier(super.ref) {
-    fetchFirstBatch();
-  }
-
-  @override
-  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
-
-  @override
-  Future<List<Document>> fetchPage(List<String> queries) async {
-    final response = await ref.read(databasesProvider).listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdVideos,
-      queries: [
-        Query.notEqual('category', 'shorts'),
-        Query.equal('adminStatus', 'approved'),
-        Query.orderDesc('\$createdAt'),
-        ...queries,
-      ],
-    );
-    return response.documents;
+  VideosListNotifier(super.ref) { fetchFirstBatch(); }
+  @override Video fromDocument(Document doc) => Video.fromAppwrite(doc);
+  @override Future<List<Document>> fetchPage(List<String> queries) async {
+    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
+      Query.notEqual('category', 'shorts'), Query.equal('adminStatus', 'approved'), Query.orderDesc('\$createdAt'), ...queries])).documents;
   }
 }
+final videosListProvider = StateNotifierProvider<VideosListNotifier, PaginationState<Video>>((ref) => VideosListNotifier(ref));
 
-final videosListProvider = StateNotifierProvider<VideosListNotifier, PaginationState<Video>>((ref) {
-  return VideosListNotifier(ref);
-});
-
-// C. USER VIDEOS (Shorts & Long)
 class UserLongVideosNotifier extends PaginatedListNotifier<Video> {
   UserLongVideosNotifier(super.ref);
-  @override
-  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
-  @override
-  Future<List<Document>> fetchPage(List<String> queries) async {
+  @override Video fromDocument(Document doc) => Video.fromAppwrite(doc);
+  @override Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
-    return (await ref.read(databasesProvider).listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdVideos,
-      queries: [Query.equal('userId', user.$id), Query.notEqual('category', 'shorts'), Query.orderDesc('\$createdAt'), ...queries],
-    )).documents;
+    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
+      Query.equal('userId', user.$id), Query.notEqual('category', 'shorts'), Query.orderDesc('\$createdAt'), ...queries])).documents;
   }
 }
 final paginatedUserLongVideosProvider = StateNotifierProvider<UserLongVideosNotifier, PaginationState<Video>>((ref) => UserLongVideosNotifier(ref));
 
 class UserShortsNotifier extends PaginatedListNotifier<Video> {
   UserShortsNotifier(super.ref);
-  @override
-  Video fromDocument(Document doc) => Video.fromAppwrite(doc);
-  @override
-  Future<List<Document>> fetchPage(List<String> queries) async {
+  @override Video fromDocument(Document doc) => Video.fromAppwrite(doc);
+  @override Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
-    return (await ref.read(databasesProvider).listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: AppwriteClient.collectionIdVideos,
-      queries: [Query.equal('userId', user.$id), Query.equal('category', 'shorts'), Query.orderDesc('\$createdAt'), ...queries],
-    )).documents;
+    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
+      Query.equal('userId', user.$id), Query.equal('category', 'shorts'), Query.orderDesc('\$createdAt'), ...queries])).documents;
   }
 }
 final paginatedUserShortsProvider = StateNotifierProvider<UserShortsNotifier, PaginationState<Video>>((ref) => UserShortsNotifier(ref));
 
-// D. LINKED VIDEOS (Liked, History, Watch Later)
 class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   PaginatedLinkNotifier(super.ref, {required this.collectionId}) { fetchFirstBatch(); }
   final String collectionId;
-  @override
-  Document fromDocument(Document doc) => doc;
-  @override
-  Future<List<Document>> fetchPage(List<String> queries) async {
+  @override Document fromDocument(Document doc) => doc;
+  @override Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
-    return (await ref.read(databasesProvider).listDocuments(
-      databaseId: AppwriteClient.databaseId,
-      collectionId: collectionId,
-      queries: [Query.equal('userId', user.$id), Query.orderDesc('\$createdAt'), ...queries],
-    )).documents;
+    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: collectionId, queries: [
+      Query.equal('userId', user.$id), Query.orderDesc('\$createdAt'), ...queries])).documents;
   }
 }
 final paginatedLikedVideosProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdLikes));
 final paginatedHistoryProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdHistory));
 final paginatedWatchLaterProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdWatchLater));
 
-// E. SINGLE ITEM & HELPERS
 final videoDetailsProvider = FutureProvider.family<Video, String>((ref, videoId) async {
   final doc = await ref.watch(databasesProvider).getDocument(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, documentId: videoId);
   return Video.fromAppwrite(doc);
 });
 
+// FIX: Added query to EXCLUDE shorts from suggestions
 final suggestedVideosProvider = FutureProvider.family<List<Video>, String>((ref, currentVideoId) async {
-  final response = await ref.watch(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [Query.equal('adminStatus', 'approved'), Query.limit(10), Query.orderDesc('\$createdAt')]);
+  final response = await ref.watch(databasesProvider).listDocuments(
+    databaseId: AppwriteClient.databaseId,
+    collectionId: AppwriteClient.collectionIdVideos,
+    queries: [
+      Query.equal('adminStatus', 'approved'),
+      Query.notEqual('category', 'shorts'), 
+      Query.limit(10),
+      Query.orderDesc('\$createdAt')
+    ]
+  );
   return response.documents.map((d) => Video.fromAppwrite(d)).where((v) => v.id != currentVideoId).toList();
 });

@@ -5,13 +5,15 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
 import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
 import 'package:ofgconnects_mobile/logic/shorts_provider.dart'; 
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/shorts_player.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
+
+// Provider to track manual play/pause state per video
+final shortsPlayPauseProvider = StateProvider.family<bool, String>((ref, id) => true);
 
 class ShortsPage extends ConsumerStatefulWidget {
   final String? videoId;
@@ -22,11 +24,12 @@ class ShortsPage extends ConsumerStatefulWidget {
 }
 
 class _ShortsPageState extends ConsumerState<ShortsPage> {
-  final PageController _pageController = PageController();
+  late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(shortsListProvider.notifier).init(widget.videoId);
       ref.read(activeShortsIndexProvider.notifier).state = 0;
@@ -43,12 +46,11 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(shortsListProvider);
 
-    // --- FIX: Prevents app closure on back gesture/button ---
     return PopScope(
-      canPop: false, // Prevents default pop (closing app)
+      canPop: context.canPop(), 
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        context.go('/home'); // Force redirect to Home screen
+        context.go('/home'); 
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -60,6 +62,9 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
             : PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
+                // OPTIMIZATION: Renders the previous/next video in memory for faster swipes
+                allowImplicitScrolling: true, 
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: state.items.length,
                 onPageChanged: (index) {
                   ref.read(activeShortsIndexProvider.notifier).state = index;
@@ -96,11 +101,19 @@ class _ShortsItem extends ConsumerWidget {
 
     return Stack(
       children: [
+        // VIDEO LAYER
         Positioned.fill(
-          child: ShortsPlayer(video: video, index: index),
+          child: GestureDetector(
+            onTap: () {
+              // Handle Play/Pause here because ShortsPlayer ignores pointers
+              final currentState = ref.read(shortsPlayPauseProvider(video.id));
+              ref.read(shortsPlayPauseProvider(video.id).notifier).state = !currentState;
+            },
+            child: ShortsPlayer(video: video, index: index),
+          ),
         ),
 
-        // Gradient for readability
+        // GRADIENT LAYER (Visuals only, ignores touches)
         Positioned.fill(
           child: IgnorePointer(
             child: Container(
@@ -115,7 +128,7 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // Action Buttons
+        // RIGHT ACTION BUTTONS
         Positioned(
           right: 12,
           bottom: bottomOffset + 60, 
@@ -150,7 +163,7 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // --- UPDATED: Follow button next to name ---
+        // BOTTOM LEFT INFO
         Positioned(
           left: 16,
           right: 80,
@@ -159,12 +172,15 @@ class _ShortsItem extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisSize: MainAxisSize.min, // Keep components together
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   CircleAvatar(
                     radius: 18,
                     backgroundColor: Colors.blueAccent,
-                    child: Text(video.creatorName[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+                    child: Text(
+                      video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : '?', 
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Flexible(

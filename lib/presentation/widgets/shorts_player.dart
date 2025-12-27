@@ -1,20 +1,17 @@
+// lib/presentation/widgets/shorts_player.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // <--- Needed for ConsumerStatefulWidget
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:ofgconnects_mobile/models/video.dart' as model;
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/logic/shorts_provider.dart'; // <--- Ensure this is imported
+import 'package:ofgconnects_mobile/logic/shorts_provider.dart';
+import 'package:ofgconnects_mobile/presentation/pages/shorts_page.dart';
 
 class ShortsPlayer extends ConsumerStatefulWidget {
   final model.Video video;
-  final int index; // <--- ADDED THIS PARAMETER
+  final int index;
   
-  const ShortsPlayer({
-    super.key, 
-    required this.video, 
-    required this.index // <--- ADDED THIS
-  });
+  const ShortsPlayer({super.key, required this.video, required this.index});
 
   @override
   ConsumerState<ShortsPlayer> createState() => _ShortsPlayerState();
@@ -24,6 +21,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   late final Player _player;
   late final VideoController _controller;
   bool _isInitialized = false;
+  bool _showPauseIcon = false;
 
   @override
   void initState() {
@@ -34,7 +32,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
       configuration: const VideoControllerConfiguration(
         scale: 1.0,
         enableHardwareAcceleration: true,
-      )
+      ),
     );
     _initPlayer();
   }
@@ -46,32 +44,18 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   }
 
   Future<void> _initPlayer() async {
-    // 1. Construct URL
-    String url = widget.video.videoUrl;
-    if (!url.startsWith('http')) {
-       url = AppwriteClient.storage.getFileView(
-        bucketId: AppwriteClient.bucketIdVideos,
-        fileId: widget.video.videoUrl,
-      ).toString();
-    }
-    // Android Emulator Fix
-    if (url.contains('localhost')) {
-      url = url.replaceFirst('localhost', '10.0.2.2');
-    }
-    if (!url.startsWith('http')) {
-      url = 'http://$url';
-    }
+    // FIX: Using videoUrl directly for speed, as requested.
+    // Ensure your database contains the full, valid URL.
+    try {
+      await _player.open(Media(widget.video.videoUrl), play: false); 
+      await _player.setPlaylistMode(PlaylistMode.loop); // Loops video automatically
 
-    // 2. Open Media (Start Paused)
-    await _player.open(Media(url), play: false); 
-    await _player.setPlaylistMode(PlaylistMode.single); 
-
-    if (mounted) {
-      setState(() {
-        _isInitialized = true;
-      });
-      // 3. Check if we should play immediately (e.g. first video)
-      _checkAutoPlay();
+      if (mounted) {
+        setState(() => _isInitialized = true);
+        _checkAutoPlay();
+      }
+    } catch (e) {
+      debugPrint("Error loading video: $e");
     }
   }
 
@@ -79,35 +63,64 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     final activeIndex = ref.read(activeShortsIndexProvider);
     if (activeIndex == widget.index) {
       _player.play();
-    } else {
-      _player.pause();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 4. Listen to index changes to Play/Pause automatically
-    ref.listen(activeShortsIndexProvider, (previous, next) {
+    // 1. Listen for swipe changes (Auto play/pause)
+    ref.listen(activeShortsIndexProvider, (prev, next) {
       if (!_isInitialized) return;
-      
       if (next == widget.index) {
         _player.play();
       } else {
         _player.pause();
+        _player.seek(Duration.zero); // Reset position
       }
     });
 
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: _isInitialized
-            ? Video(
-                controller: _controller,
-                fit: BoxFit.cover, // Shorts cover the whole screen
-                controls: NoVideoControls, // Clean UI for shorts
-              )
-            : const CircularProgressIndicator(color: Colors.white),
-      ),
+    // 2. Listen for manual play/pause tap
+    ref.listen(shortsPlayPauseProvider(widget.video.id), (prev, isPlaying) {
+      if (isPlaying) {
+        _player.play();
+      } else {
+        _player.pause();
+      }
+      
+      // Temporary animation overlay
+      if (mounted) {
+        setState(() => _showPauseIcon = true);
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) setState(() => _showPauseIcon = false);
+        });
+      }
+    });
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          color: Colors.black,
+          child: Center(
+            child: _isInitialized
+                // FIX: IgnorePointer prevents the Video widget from stealing swipes
+                ? IgnorePointer(
+                    child: Video(
+                      controller: _controller,
+                      fit: BoxFit.cover,
+                      controls: NoVideoControls,
+                    ),
+                  )
+                : const CircularProgressIndicator(color: Colors.white),
+          ),
+        ),
+        if (_showPauseIcon)
+          Icon(
+            ref.read(shortsPlayPauseProvider(widget.video.id)) ? Icons.play_arrow : Icons.pause,
+            size: 80,
+            color: Colors.white.withOpacity(0.5),
+          ),
+      ],
     );
   }
 }

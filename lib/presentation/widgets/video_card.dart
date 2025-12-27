@@ -17,7 +17,8 @@ class VideoCard extends ConsumerWidget {
     return GestureDetector(
       onTap: () {
         if (isShorts) {
-          context.go('/shorts?id=${video.id}');
+          // FIX: Use push instead of go to maintain navigation history for back gestures
+          context.push('/shorts?id=${video.id}');
         } else {
           context.push('/watch/${video.id}');
         }
@@ -41,7 +42,6 @@ class VideoCard extends ConsumerWidget {
                         )
                       : const Center(child: Icon(Icons.play_circle_outline, color: Colors.white, size: 50)),
                 ),
-                // Only show duration label if we had it, or "Shorts" label
                 Positioned(
                   bottom: 8,
                   right: 8,

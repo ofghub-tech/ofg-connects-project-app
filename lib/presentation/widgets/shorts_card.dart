@@ -1,4 +1,3 @@
-// lib/presentation/widgets/shorts_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +11,8 @@ class ShortsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
       onTap: () {
-        context.go('/shorts?id=${video.id}');
+        // FIX: Use push instead of go to enable back navigation
+        context.push('/shorts?id=${video.id}');
       },
       child: Card(
         clipBehavior: Clip.antiAlias,

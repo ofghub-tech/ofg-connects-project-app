@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart'; 
@@ -6,8 +5,6 @@ import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
 import 'package:ofgconnects_mobile/logic/shorts_provider.dart';
 import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:video_player/video_player.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
-import 'package:path_provider/path_provider.dart';
 
 class ShortsPlayer extends ConsumerStatefulWidget {
   final Video video;
@@ -39,44 +36,16 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
     if (isBuffering != _isBuffering) setState(() => _isBuffering = isBuffering);
   }
 
-  // Adaptive HLS Master Playlist Generation
-  Future<File> _createMasterPlaylist(Video video) async {
-    final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/${video.id}_master.m3u8');
-    
-    if (await file.exists()) return file;
-
-    StringBuffer content = StringBuffer();
-    content.writeln("#EXTM3U");
-    
-    // Low Quality First (Fast Start)
-    if (video.url360p != null) {
-      content.writeln("#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360");
-      content.writeln(video.url360p);
-    }
-    if (video.url480p != null) {
-      content.writeln("#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=854x480");
-      content.writeln(video.url480p);
-    }
-    if (video.url720p != null) {
-      content.writeln("#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720");
-      content.writeln(video.url720p);
-    }
-    
-    await file.writeAsString(content.toString());
-    return file;
-  }
-
+  // --- FIXED: Use networkUrl directly for HLS/MP4 streams ---
   Future<void> _initializePlayer() async {
     try {
-      VideoPlayerController controller;
-
+      String playUrl = widget.video.videoUrl; // Default to raw
       if (widget.video.compressionStatus == 'Done') {
-        final masterFile = await _createMasterPlaylist(widget.video);
-        controller = VideoPlayerController.file(masterFile);
-      } else {
-        controller = VideoPlayerController.networkUrl(Uri.parse(widget.video.videoUrl));
+        // Prefer 480p or 360p for mobile data efficiency on Shorts
+        playUrl = widget.video.url480p ?? widget.video.url360p ?? widget.video.videoUrl;
       }
+
+      final controller = VideoPlayerController.networkUrl(Uri.parse(playUrl));
 
       controller.addListener(_videoListener);
       await controller.initialize();
@@ -88,6 +57,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
       }
     } catch (e) {
       if(mounted) setState(() => _isBuffering = false);
+      print("Shorts Init Error: $e");
     }
   }
 

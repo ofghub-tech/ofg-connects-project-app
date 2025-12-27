@@ -12,7 +12,6 @@ import 'package:ofgconnects_mobile/models/video.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/shorts_player.dart';
 import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
 
-// Provider to track manual play/pause state per video
 final shortsPlayPauseProvider = StateProvider.family<bool, String>((ref, id) => true);
 
 class ShortsPage extends ConsumerStatefulWidget {
@@ -42,6 +41,14 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
     super.dispose();
   }
 
+  // --- Animation Logic ---
+  void _animateToNextPage() {
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(shortsListProvider);
@@ -62,21 +69,26 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
             : PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
-                // OPTIMIZATION: Renders the previous/next video in memory for faster swipes
-                allowImplicitScrolling: true, 
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: state.items.length,
+                allowImplicitScrolling: false, 
+                physics: const ClampingScrollPhysics(),
+                // Infinite scroll via modulo
                 onPageChanged: (index) {
-                  ref.read(activeShortsIndexProvider.notifier).state = index;
-                  if (index >= state.items.length - 2) {
+                  final int realIndex = index % state.items.length;
+                  ref.read(activeShortsIndexProvider.notifier).state = realIndex;
+                  ref.read(interactionProvider).logVideoView(state.items[realIndex].id);
+                  
+                  if (realIndex >= state.items.length - 2) {
                     ref.read(shortsListProvider.notifier).fetchMore();
                   }
-                  ref.read(interactionProvider).logVideoView(state.items[index].id);
                 },
                 itemBuilder: (context, index) {
+                  final int realIndex = index % state.items.length;
+                  final video = state.items[realIndex];
+
                   return _ShortsItem(
-                    video: state.items[index], 
-                    index: index,
+                    video: video, 
+                    index: realIndex,
+                    onNextPressed: _animateToNextPage,
                   );
                 },
               ),
@@ -88,8 +100,13 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
 class _ShortsItem extends ConsumerWidget {
   final Video video;
   final int index;
+  final VoidCallback onNextPressed;
 
-  const _ShortsItem({required this.video, required this.index});
+  const _ShortsItem({
+    required this.video, 
+    required this.index,
+    required this.onNextPressed,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -101,19 +118,23 @@ class _ShortsItem extends ConsumerWidget {
 
     return Stack(
       children: [
-        // VIDEO LAYER
+        // VIDEO
         Positioned.fill(
           child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () {
-              // Handle Play/Pause here because ShortsPlayer ignores pointers
               final currentState = ref.read(shortsPlayPauseProvider(video.id));
               ref.read(shortsPlayPauseProvider(video.id).notifier).state = !currentState;
             },
-            child: ShortsPlayer(video: video, index: index),
+            child: ShortsPlayer(
+              key: ValueKey(video.id),
+              video: video, 
+              index: index
+            ),
           ),
         ),
 
-        // GRADIENT LAYER (Visuals only, ignores touches)
+        // GRADIENT
         Positioned.fill(
           child: IgnorePointer(
             child: Container(
@@ -128,31 +149,48 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // RIGHT ACTION BUTTONS
+        // ACTION BUTTONS
         Positioned(
           right: 12,
           bottom: bottomOffset + 60, 
           child: Column(
             children: [
+              // Next Button
+              _InteractionButton(
+                icon: Icons.keyboard_arrow_down_rounded,
+                label: "Next",
+                onTap: onNextPressed,
+                iconSize: 34,
+              ),
+              const SizedBox(height: 18),
+              
+              // Like Button
               _InteractionButton(
                 icon: isLiked ? Icons.favorite : Icons.favorite_border,
                 label: NumberFormat.compact().format(video.likeCount),
                 color: isLiked ? Colors.red : Colors.white,
-                onTap: () => ref.read(isLikedProvider(video.id).notifier).toggle(),
+                // [FIXED] Pass type: 'shorts' here!
+                onTap: () => ref.read(isLikedProvider(video.id).notifier).toggle(type: 'shorts'),
               ),
               const SizedBox(height: 18),
+              
+              // Comments Button
               _InteractionButton(
                 icon: Icons.chat_bubble_outline,
                 label: "Comments",
                 onTap: () => _showComments(context, video.id),
               ),
               const SizedBox(height: 18),
+              
+              // Share Button
               _InteractionButton(
                 icon: Icons.share_outlined,
                 label: "Share",
                 onTap: () => Share.share("Watch: ${video.title}\nhttps://ofgconnects.com/shorts?id=${video.id}"),
               ),
               const SizedBox(height: 18),
+              
+              // Save Button
               _InteractionButton(
                 icon: isSaved ? Icons.bookmark : Icons.bookmark_outline,
                 label: isSaved ? "Saved" : "Save",
@@ -163,7 +201,7 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // BOTTOM LEFT INFO
+        // INFO (Bottom Left)
         Positioned(
           left: 16,
           right: 80,
@@ -259,19 +297,27 @@ class _InteractionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Color color;
+  final double iconSize;
 
-  const _InteractionButton({required this.icon, required this.label, required this.onTap, this.color = Colors.white});
+  const _InteractionButton({
+    required this.icon, 
+    required this.label, 
+    required this.onTap, 
+    this.color = Colors.white,
+    this.iconSize = 28,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: const BoxDecoration(color: Colors.black26, shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(icon, color: color, size: iconSize),
           ),
           const SizedBox(height: 4),
           Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),

@@ -2,7 +2,7 @@ import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; // Imports PaginatedListNotifier & databasesProvider
+import 'package:ofgconnects_mobile/logic/video_provider.dart'; 
 import 'package:ofgconnects_mobile/models/video.dart';
 
 // 1. TRACKS WHICH VIDEO IS CURRENTLY PLAYING
@@ -17,11 +17,9 @@ final shortsListProvider = StateNotifierProvider<ShortsListNotifier, PaginationS
 class ShortsListNotifier extends PaginatedListNotifier<Video> {
   ShortsListNotifier(super.ref);
 
-  // IMPLEMENTATION 1: Convert Appwrite Document to Video Model
   @override
   Video fromDocument(Document doc) => Video.fromAppwrite(doc);
 
-  // IMPLEMENTATION 2: Fetch Logic
   @override
   Future<List<Document>> fetchPage(List<String> queries) async {
     final response = await ref.read(databasesProvider).listDocuments(
@@ -37,35 +35,56 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
     return response.documents;
   }
 
-  // EXTRA: Handle Deep Linking (Start with a specific video)
+  // EXTRA: Handle Deep Linking
   Future<void> init(String? startWithVideoId) async {
-    // If we already have items and aren't forcing a specific start, do nothing
+    // 1. Safety Check
     if (state.items.isNotEmpty && startWithVideoId == null) return;
+
+    // 2. [FIXED] Use 'isLoadingMore' instead of 'isLoading'
+    // This triggers the spinner because your UI checks: if items.isEmpty && isLoadingMore -> Show Spinner
+    state = PaginationState(
+      items: [], 
+      isLoadingMore: true, // <--- CHANGED THIS
+      hasMore: true
+    );
 
     if (startWithVideoId != null) {
       try {
-        // Fetch the specific video first
+        // A. Fetch the specific deep-linked video first
         final doc = await ref.read(databasesProvider).getDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdVideos,
           documentId: startWithVideoId,
         );
         
-        // Reset state with this single video
+        final startVideo = Video.fromAppwrite(doc);
+
+        // B. Set state with ONLY this video initially
         state = PaginationState(
-          items: [Video.fromAppwrite(doc)],
-          isLoadingMore: true, // Mark loading so we can fetch the rest next
+          items: [startVideo],
+          isLoadingMore: true, // <--- CHANGED THIS (Keep true while fetching batch)
           hasMore: true,
         );
         
-        // Fetch the rest of the batch normally
-        await fetchFirstBatch(); 
+        // C. Manually fetch the standard feed 
+        final List<Document> nextDocs = await fetchPage([]); 
+        final List<Video> nextVideos = nextDocs.map((d) => fromDocument(d)).toList();
+
+        // D. Remove duplicates
+        nextVideos.removeWhere((v) => v.id == startWithVideoId);
+
+        // E. Append and update state
+        state = state.copyWith(
+          items: [startVideo, ...nextVideos],
+          isLoadingMore: false, // <--- Stop loading
+        );
+
       } catch (e) {
         print("Error fetching deep linked short: $e");
-        fetchFirstBatch();
+        await fetchFirstBatch();
       }
     } else {
-      fetchFirstBatch();
+      await fetchFirstBatch();
     }
   }
 }

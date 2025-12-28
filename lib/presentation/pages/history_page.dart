@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/history_provider.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/shorts_card.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/animate_in_effect.dart';
+import 'package:ofgconnects/logic/history_provider.dart';
+import 'package:ofgconnects/presentation/widgets/video_card.dart';
+import 'package:ofgconnects/presentation/widgets/shorts_card.dart';
+import 'package:ofgconnects/presentation/widgets/animate_in_effect.dart';
 
 class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});

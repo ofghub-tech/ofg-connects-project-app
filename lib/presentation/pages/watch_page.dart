@@ -7,13 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
-import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
-import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
-import 'package:ofgconnects_mobile/models/video.dart' as model;
-import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/suggested_video_card.dart';
+import 'package:ofgconnects/api/appwrite_client.dart';
+import 'package:ofgconnects/logic/video_provider.dart';
+import 'package:ofgconnects/logic/interaction_provider.dart';
+import 'package:ofgconnects/logic/subscription_provider.dart';
+import 'package:ofgconnects/models/video.dart' as model;
+import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
+import 'package:ofgconnects/presentation/widgets/suggested_video_card.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
   final String videoId;

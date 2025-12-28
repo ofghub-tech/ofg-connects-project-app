@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ofgconnects_mobile/logic/status_provider.dart';
+import 'package:ofgconnects/logic/status_provider.dart';
 
 class CreateStatusPage extends ConsumerStatefulWidget {
   const CreateStatusPage({super.key});

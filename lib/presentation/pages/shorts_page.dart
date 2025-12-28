@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'package:ofgconnects_mobile/logic/interaction_provider.dart';
-import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
-import 'package:ofgconnects_mobile/logic/shorts_provider.dart'; 
-import 'package:ofgconnects_mobile/models/video.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/shorts_player.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/comments_sheet.dart';
+import 'package:ofgconnects/logic/interaction_provider.dart';
+import 'package:ofgconnects/logic/subscription_provider.dart';
+import 'package:ofgconnects/logic/shorts_provider.dart'; 
+import 'package:ofgconnects/models/video.dart';
+import 'package:ofgconnects/presentation/widgets/shorts_player.dart';
+import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
 
 final shortsPlayPauseProvider = StateProvider.family<bool, String>((ref, id) => true);
 

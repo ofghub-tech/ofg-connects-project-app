@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ofgconnects_mobile/logic/following_provider.dart';
-import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
+import 'package:ofgconnects/logic/following_provider.dart';
+import 'package:ofgconnects/logic/subscription_provider.dart';
 
 class FollowingPage extends ConsumerStatefulWidget {
   const FollowingPage({super.key});

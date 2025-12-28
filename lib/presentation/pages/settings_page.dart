@@ -1,7 +1,7 @@
 // lib/presentation/pages/settings_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:ofgconnects/logic/auth_provider.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});

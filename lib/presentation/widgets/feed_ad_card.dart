@@ -14,7 +14,7 @@ class _FeedAdCardState extends State<FeedAdCard> {
   bool _hasLoadError = false; // Track errors
 
   // Use Test ID for Medium Rectangle (300x250)
-  final String _adUnitId = 'ca-app-pub-3940256099942544/6300978111';
+  final String _adUnitId = 'ca-app-pub-1608316244906634/9732492112';
 
   @override
   void initState() {

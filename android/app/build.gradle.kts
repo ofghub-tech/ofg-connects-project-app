@@ -24,7 +24,7 @@ android {
         applicationId = "com.ofghub.ofgconnects" 
         
         // FIX: Set explicitly to 21 for video_compress and media_kit support
-        minSdk = 21 
+        minSdk = flutter.minSdkVersion 
         
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

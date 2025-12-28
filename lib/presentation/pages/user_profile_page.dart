@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:ofgconnects_mobile/logic/profile_provider.dart';
-import 'package:ofgconnects_mobile/logic/subscription_provider.dart';
-import 'package:ofgconnects_mobile/logic/auth_provider.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
-import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects/logic/profile_provider.dart';
+import 'package:ofgconnects/logic/subscription_provider.dart';
+import 'package:ofgconnects/logic/auth_provider.dart';
+import 'package:ofgconnects/presentation/widgets/video_card.dart';
+import 'package:ofgconnects/logic/video_provider.dart';
+import 'package:ofgconnects/models/video.dart';
 
 class UserProfilePage extends ConsumerStatefulWidget {
   final String userId;

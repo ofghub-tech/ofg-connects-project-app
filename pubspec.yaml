@@ -1,7 +1,7 @@
-name: ofgconnects_mobile
-description: "A Christian Social app."
+name: ofgconnects
+description: "A Christian Social media app."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -28,11 +28,15 @@ dependencies:
   flutter_cache_manager: ^3.3.2
   path: ^1.9.0
 
-  # --- 5. VIDEO PLAYER (MEDIA KIT) ---
-  # Removed video_player & chewie
+  # --- 5. VIDEO PLAYERS ---
+  # For Shorts/Feed (High performance)
   media_kit: ^1.1.10
   media_kit_video: ^1.2.4
-  media_kit_libs_video: ^1.0.4 # <--- CRITICAL for VP9 on iOS
+  media_kit_libs_video: ^1.0.4
+  
+  # For Upload Preview (UI specific)
+  video_player: ^2.8.6  # <--- ADDED BACK
+  chewie: ^1.8.1        # <--- ADDED BACK
   
   video_thumbnail: ^0.5.3
   path_provider: ^2.1.2
@@ -42,12 +46,10 @@ dependencies:
   share_plus: ^12.0.1
   cupertino_icons: ^1.0.6
 
-  # --- 7. MONETIZATION ---
+  # --- 7. MONETIZATION & UI ---
   google_mobile_ads: ^5.1.0
   cached_network_image: ^3.4.1
   timeago: ^3.7.1
-  video_player: ^2.10.1
-  chewie: ^1.13.0
 
 dependency_overrides:
   flutter_web_auth_2: ^4.1.0
@@ -60,7 +62,8 @@ dev_dependencies:
   riverpod_generator: ^2.4.0
   custom_lint: ^0.6.4
   riverpod_lint: ^2.3.10
-  
+  flutter_launcher_icons: ^0.14.4
+
 flutter:
   uses-material-design: true
   assets:

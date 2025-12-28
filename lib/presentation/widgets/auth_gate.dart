@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+import 'package:ofgconnects/logic/auth_provider.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});

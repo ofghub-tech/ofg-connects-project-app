@@ -1,3 +1,4 @@
+import 'dart:io'; // Recommended for Platform checks
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
@@ -13,8 +14,11 @@ class _FeedAdCardState extends State<FeedAdCard> {
   bool _isAdLoaded = false;
   bool _hasLoadError = false; // Track errors
 
-  // Use Test ID for Medium Rectangle (300x250)
-  final String _adUnitId = 'ca-app-pub-1608316244906634/9732492112';
+  // FIX: Swapped to Test ID to match comment and prevent AdMob policy violations during dev.
+  // Real Android ID: 'ca-app-pub-1608316244906634/9732492112'
+  final String _adUnitId = Platform.isAndroid 
+      ? 'ca-app-pub-3940256099942544/6300978111' // Google Test ID (Safe for Dev)
+      : 'ca-app-pub-3940256099942544/2934735716'; // Google iOS Test ID
 
   @override
   void initState() {

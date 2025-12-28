@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart'; // <-- THIS WAS THE FIX
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // We import the new widget
-import 'package:ofgconnects_mobile/presentation/widgets/linked_video_card.dart';
+import 'package:ofgconnects/presentation/widgets/linked_video_card.dart';
 // We import the provider file
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
+import 'package:ofgconnects/logic/video_provider.dart';
 
 // 1. Convert to ConsumerStatefulWidget
 class LikedVideosPage extends ConsumerStatefulWidget {

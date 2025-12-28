@@ -1,11 +1,11 @@
 // lib/logic/subscription_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:ofgconnects/api/appwrite_client.dart';
+import 'package:ofgconnects/logic/auth_provider.dart';
 
 // Import the *existing* databasesProvider
-import 'package:ofgconnects_mobile/logic/video_provider.dart' show databasesProvider;
+import 'package:ofgconnects/logic/video_provider.dart' show databasesProvider;
 
 // Check if following
 final isFollowingProvider = FutureProvider.family<bool, String>((ref, creatorId) async {

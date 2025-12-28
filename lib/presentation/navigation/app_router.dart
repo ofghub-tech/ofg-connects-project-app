@@ -1,24 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ofgconnects_mobile/models/status.dart'; 
-import 'package:ofgconnects_mobile/presentation/pages/following_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/home_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/my_space_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/shorts_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/watch_page.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/auth_gate.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/main_app_shell.dart';
+import 'package:ofgconnects/models/status.dart'; 
+import 'package:ofgconnects/presentation/pages/following_page.dart';
+import 'package:ofgconnects/presentation/pages/home_page.dart';
+import 'package:ofgconnects/presentation/pages/my_space_page.dart';
+import 'package:ofgconnects/presentation/pages/shorts_page.dart';
+import 'package:ofgconnects/presentation/pages/watch_page.dart';
+import 'package:ofgconnects/presentation/widgets/auth_gate.dart';
+import 'package:ofgconnects/presentation/widgets/main_app_shell.dart';
 
-import 'package:ofgconnects_mobile/presentation/pages/history_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/watch_later_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/upload_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/bible_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/settings_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/search_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/user_profile_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/create_status_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/status_view_page.dart';
-import 'package:ofgconnects_mobile/presentation/pages/edit_profile_page.dart';
+import 'package:ofgconnects/presentation/pages/history_page.dart';
+import 'package:ofgconnects/presentation/pages/watch_later_page.dart';
+import 'package:ofgconnects/presentation/pages/upload_page.dart';
+import 'package:ofgconnects/presentation/pages/bible_page.dart';
+import 'package:ofgconnects/presentation/pages/settings_page.dart';
+import 'package:ofgconnects/presentation/pages/search_page.dart';
+import 'package:ofgconnects/presentation/pages/user_profile_page.dart';
+import 'package:ofgconnects/presentation/pages/create_status_page.dart';
+import 'package:ofgconnects/presentation/pages/status_view_page.dart';
+import 'package:ofgconnects/presentation/pages/edit_profile_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) => router);
 

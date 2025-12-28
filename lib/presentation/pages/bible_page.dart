@@ -1,7 +1,7 @@
 // lib/presentation/pages/bible_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/bible_provider.dart';
+import 'package:ofgconnects/logic/bible_provider.dart';
 
 class BiblePage extends ConsumerWidget {
   const BiblePage({super.key});

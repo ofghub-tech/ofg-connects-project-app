@@ -1,0 +1,52 @@
+[33mae3527d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m max ready to release
+[33m9d42353[m ready to release
+[33m61ffc11[m max ready to release
+[33mf3bd405[m max ready to release
+[33mc0b756d[m max ready to release
+[33m966adfb[m max ready to release
+[33m2a0d659[m max ready to release
+[33m7491d01[m need to fix like button
+[33m1901ad3[m need to fix like button
+[33m292a70e[m need to fix back gesture
+[33m6e8831c[m need to fix back gesture
+[33m4e2af37[m fixed buttons in watch page
+[33m3522075[m Update video logic and presentation pages
+[33mb98c251[m compressed videos are not playing
+[33maf86dd1[m[33m ([m[1;32mmy-temp-fix[m[33m, [m[1;32mfix-media-kit-update[m[33m)[m compressed videos are not playing
+[33m8148912[m compressed videos are not playing
+[33m903467d[m compressed videos are not playing
+[33mbbbd551[m compressed videos are not playing
+[33mf54f0ef[m compressed videos are not playing
+[33m57e9af9[m compressed videos are not playing
+[33m9d9e6db[m watch page erroes
+[33m5ee6c32[m check for bugs
+[33m5883019[m check for bugs
+[33m7405787[m check for bugs
+[33mf526fb4[m updated logo and upload screen, need to implement status and profile pictures
+[33m0097447[m fix the adds placeholders
+[33m3417f38[m fixed video playback error and shows only approved videos
+[33m5d85df2[m connected to r2
+[33m53bff00[m connected to r2
+[33m097beef[m connected to r2
+[33m3d2f971[m added profile and status
+[33m7ce492e[m added profile and status
+[33m9dcd381[m added profile and status
+[33m9bfdd5c[m fixed the history bug
+[33m9ccec90[m enhanced the ui
+[33m0955daf[m enhanced the ui
+[33me401009[m Feat: UI Overhaul & Performance Fixes. Added lazy loading, Hero animations, cached images, and fixed nav bar overlap.
+[33m9c8b8a9[m fixed some crucial bugs
+[33m6a33f34[m fixed some crucial bugs
+[33m32a38c5[m resolver login issue and updated myspace
+[33m066cac3[m hidden bug in google oauth
+[33m925dc42[m google oth provider
+[33me2a488b[m fix the pages places
+[33mcf29eb6[m integrate the logics
+[33m21e5717[m fix the ui
+[33m40538b7[m update the pages
+[33m8aa64de[m  fix the start error
+[33m00eea51[m need to fix bugs
+[33mc7356f5[m created some basic pages
+[33m0992edb[m connected to backend and succedfully fetching data, need to debug the video and image data to display correctly
+[33m1253c50[m need to connect to backend
+[33me12b7e4[m Initial commit of OFG Connects mobile app

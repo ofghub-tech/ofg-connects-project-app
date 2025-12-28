@@ -10,10 +10,10 @@
         
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-1608316244906634/9732492112"/>
+            android:value="ca-app-pub-1608316244906634~1231185569"/>
         
         <activity
-            android:name=".MainActivity"
+            android:name="com.ofghub.ofgconnects.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"

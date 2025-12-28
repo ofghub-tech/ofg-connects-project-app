@@ -1,8 +1,9 @@
 // lib/logic/bible_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/models/bible_verse.dart';
+// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+import 'package:ofgconnects/api/appwrite_client.dart';
+import 'package:ofgconnects/models/bible_verse.dart';
 
 // 1. State to hold current selection
 class BibleState {

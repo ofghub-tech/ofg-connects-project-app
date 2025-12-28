@@ -2,8 +2,8 @@
 import 'dart:async'; // <-- ADDED THIS IMPORT
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/search_provider.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
+import 'package:ofgconnects/logic/search_provider.dart';
+import 'package:ofgconnects/presentation/widgets/video_card.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key});

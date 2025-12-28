@@ -2,8 +2,9 @@
 import 'package:appwrite/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart';
-import 'package:ofgconnects_mobile/presentation/widgets/video_card.dart';
+// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+import 'package:ofgconnects/logic/video_provider.dart';
+import 'package:ofgconnects/presentation/widgets/video_card.dart';
 
 /// This widget is designed to be used in a paginated list of "link" documents
 /// (like 'likes', 'history', 'watchLater'). It takes one of those documents,

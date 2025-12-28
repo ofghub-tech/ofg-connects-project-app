@@ -1,8 +1,8 @@
 // lib/logic/search_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects/api/appwrite_client.dart';
+import 'package:ofgconnects/models/video.dart';
 
 // 1. This provider holds the current search term (like React state)
 final searchQueryProvider = StateProvider<String>((ref) => '');

@@ -1,9 +1,9 @@
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
-import 'package:ofgconnects_mobile/logic/video_provider.dart'; 
-import 'package:ofgconnects_mobile/models/video.dart';
+import 'package:ofgconnects/api/appwrite_client.dart';
+import 'package:ofgconnects/logic/video_provider.dart'; 
+import 'package:ofgconnects/models/video.dart';
 
 // 1. TRACKS WHICH VIDEO IS CURRENTLY PLAYING
 final activeShortsIndexProvider = StateProvider<int>((ref) => 0);

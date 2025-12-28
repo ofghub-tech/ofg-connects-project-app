@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ofgconnects_mobile/models/status.dart';
+import 'package:ofgconnects/models/status.dart';
 
 class StatusViewPage extends StatefulWidget {
   final List<Status> statuses;

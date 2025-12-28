@@ -4,7 +4,8 @@ import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart' as models;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ofgconnects_mobile/api/appwrite_client.dart';
+// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:path/path.dart' as p; // Add this for file extensions
 
 enum AuthStatus {

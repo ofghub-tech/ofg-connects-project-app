@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:ofgconnects_mobile/models/video.dart' as model;
-import 'package:ofgconnects_mobile/logic/shorts_provider.dart';
-import 'package:ofgconnects_mobile/presentation/pages/shorts_page.dart';
+// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+import 'package:ofgconnects/models/video.dart' as model;
+import 'package:ofgconnects/logic/shorts_provider.dart';
+import 'package:ofgconnects/presentation/pages/shorts_page.dart';
 
 class ShortsPlayer extends ConsumerStatefulWidget {
   final model.Video video;

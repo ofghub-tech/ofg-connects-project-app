@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:ofgconnects_mobile/models/status.dart';
+// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+import 'package:ofgconnects/models/status.dart';
 
 class StatusBubble extends StatelessWidget {
   final List<Status> statuses;

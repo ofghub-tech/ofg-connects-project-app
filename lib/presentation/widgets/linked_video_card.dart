@@ -2,7 +2,10 @@
 import 'package:appwrite/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+<<<<<<< HEAD
 // CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+=======
+>>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/logic/video_provider.dart';
 import 'package:ofgconnects/presentation/widgets/video_card.dart';
 

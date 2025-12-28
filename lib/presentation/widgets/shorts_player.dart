@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+<<<<<<< HEAD
 // CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+=======
+>>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/models/video.dart' as model;
 import 'package:ofgconnects/logic/shorts_provider.dart';
 import 'package:ofgconnects/presentation/pages/shorts_page.dart';

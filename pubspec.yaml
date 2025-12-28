@@ -63,7 +63,11 @@ dev_dependencies:
   custom_lint: ^0.6.4
   riverpod_lint: ^2.3.10
   flutter_launcher_icons: ^0.14.4
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 flutter:
   uses-material-design: true
   assets:

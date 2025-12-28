@@ -4,7 +4,10 @@ import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart' as models;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+<<<<<<< HEAD
 // CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+=======
+>>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:path/path.dart' as p; // Add this for file extensions
 

@@ -4,8 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+<<<<<<< HEAD
 import 'package:media_kit/media_kit.dart'; 
 // CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+=======
+import 'package:media_kit/media_kit.dart'; // <--- IMPORT THIS
+>>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/presentation/navigation/app_router.dart'; 
 import 'package:ofgconnects/logic/auth_provider.dart';
 

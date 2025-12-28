@@ -1,7 +1,10 @@
 // lib/logic/bible_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+<<<<<<< HEAD
 // CORRECTION: Package name must match pubspec.yaml (ofgconnects)
+=======
+>>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:ofgconnects/models/bible_verse.dart';
 

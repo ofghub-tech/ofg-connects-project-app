@@ -5,8 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:media_kit/media_kit.dart'; // <--- IMPORT THIS
-import 'package:ofgconnects_mobile/presentation/navigation/app_router.dart'; 
-import 'package:ofgconnects_mobile/logic/auth_provider.dart';
+import 'package:ofgconnects/presentation/navigation/app_router.dart'; 
+import 'package:ofgconnects/logic/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

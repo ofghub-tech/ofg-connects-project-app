@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ofgconnects_mobile/models/status.dart';
+import 'package:ofgconnects/models/status.dart';
 
 class StatusBubble extends StatelessWidget {
   final List<Status> statuses;

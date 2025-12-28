@@ -1,12 +1,12 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.ofgconnects_mobile"
+    // UPDATED: Changed from com.example.ofgconnects_mobile
+    namespace = "com.ofghub.ofgconnects" 
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,14 +20,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.ofgconnects_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // UPDATED: Unique ID for the Play Store
+        applicationId = "com.ofghub.ofgconnects" 
         
-        // --- FIX: Changed from flutter.minSdkVersion to 21 for video_compress ---
-        minSdk = flutter.minSdkVersion 
-        // ------------------------------------------------------------------------
+        // FIX: Set explicitly to 21 for video_compress and media_kit support
+        minSdk = 21 
         
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -36,8 +33,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Note: We will set up the real signingConfig in a later step
             signingConfig = signingConfigs.getByName("debug")
         }
     }

@@ -1,5 +1,5 @@
-package com.example.ofgconnects_mobile
+package com.ofghub.ofgconnects
 
 import io.flutter.embedding.android.FlutterActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity: FlutterActivity()

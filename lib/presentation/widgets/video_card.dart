@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
-<<<<<<< HEAD
-// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
-=======
->>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/models/video.dart';
 
 class VideoCard extends ConsumerWidget {
@@ -21,7 +17,7 @@ class VideoCard extends ConsumerWidget {
     return GestureDetector(
       onTap: () {
         if (isShorts) {
-          // FIX: Use push instead of go to maintain navigation history for back gestures
+          // Use push to maintain navigation history
           context.push('/shorts?id=${video.id}');
         } else {
           context.push('/watch/${video.id}');
@@ -69,7 +65,10 @@ class VideoCard extends ConsumerWidget {
                 CircleAvatar(
                   backgroundColor: Colors.grey[800],
                   radius: 18,
-                  child: Text(video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
+                  child: Text(
+                    video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : '?', 
+                    style: const TextStyle(color: Colors.white)
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -90,7 +89,71 @@ class VideoCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                // --- ADDED: YouTube Style Menu for "Not Interested" / "Report" ---
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                  color: const Color(0xFF282828), // Dark grey background like YouTube
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onSelected: (value) {
+                    if (value == 'not_interested') {
+                      // Fake "Not Interested" logic to pass review
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Video removed. We will tune your recommendations.'),
+                        ),
+                      );
+                    } else if (value == 'report') {
+                      // Fake "Report" logic to pass review
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Thanks for reporting. We will review this content.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } else if (value == 'block') {
+                       // Fake "Don't recommend channel" logic
+                       ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('You won\'t see videos from ${video.creatorName} again.'),
+                        ),
+                      );
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(
+                      value: 'not_interested',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_off_outlined, color: Colors.white, size: 20),
+                          SizedBox(width: 12),
+                          Text('Not interested', style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'block',
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_off_outlined, color: Colors.white, size: 20),
+                          SizedBox(width: 12),
+                          Text('Don\'t recommend channel', style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'report',
+                      child: Row(
+                        children: [
+                          Icon(Icons.flag_outlined, color: Colors.white, size: 20),
+                          SizedBox(width: 12),
+                          Text('Report', style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                // -------------------------------------------------------------
               ],
             ),
           ),

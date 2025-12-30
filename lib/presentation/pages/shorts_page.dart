@@ -51,11 +51,23 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(shortsListProvider);
 
+    // FIX: Strictly determine if we are on the Main Tab (Bottom Nav) or a Detail View.
+    // If videoId is null or empty, we are on the main Shorts tab.
+    final bool isMainTab = widget.videoId == null || widget.videoId!.isEmpty;
+
     return PopScope(
-      canPop: context.canPop(), 
+      // CRITICAL FIX: 
+      // If we are on the Main Tab, 'canPop' must be FALSE to block the app from closing.
+      // If we are viewing a specific video (from feed), 'canPop' is TRUE to let it go back naturally.
+      canPop: !isMainTab, 
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        context.go('/home'); 
+        
+        // If the back button was blocked (because we are on the main tab),
+        // manually navigate to the Home Page.
+        if (isMainTab) {
+          context.go('/home'); 
+        }
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -134,7 +146,7 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // ACTION BUTTONS (Removed Like Button)
+        // ACTION BUTTONS
         Positioned(
           right: 12,
           bottom: bottomOffset + 60, 

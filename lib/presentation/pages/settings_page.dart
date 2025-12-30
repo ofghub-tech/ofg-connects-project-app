@@ -47,7 +47,7 @@ class SettingsPage extends ConsumerWidget {
                 ),
               ),
             )
-          else
+          else ...[
             Card(
               clipBehavior: Clip.antiAlias,
               child: Padding(
@@ -92,6 +92,45 @@ class SettingsPage extends ConsumerWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 24),
+            // --- NEW: Danger Zone ---
+            Text(
+              "Danger Zone",
+              style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              color: Colors.red[50]!.withOpacity(0.05),
+              child: ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text("Delete Account", style: TextStyle(color: Colors.red)),
+                subtitle: const Text("Permanently delete your account and all data"),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text("Delete Account?"),
+                      content: const Text("This action cannot be undone. All your videos and data will be permanently removed."),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text("Cancel"),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            Navigator.pop(context); // Close Dialog
+                            Navigator.pop(context); // Close Settings Page
+                            await ref.read(authProvider.notifier).deleteAccount();
+                          },
+                          child: const Text("Delete", style: TextStyle(color: Colors.red)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

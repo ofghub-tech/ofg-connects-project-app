@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
-<<<<<<< HEAD
-// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
-=======
->>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/models/video.dart';
 
 class SuggestedVideoCard extends StatelessWidget {

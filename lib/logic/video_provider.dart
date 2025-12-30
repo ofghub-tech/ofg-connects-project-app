@@ -42,18 +42,29 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
   Future<List<Document>> fetchPage(List<String> queries);
   T fromDocument(Document doc);
 
+  // --- NEW: Filter Helper ---
+  bool shouldFilter(T item) {
+    return false; // Override in subclasses
+  }
+
   Future<void> fetchFirstBatch() async {
     if (state.items.isNotEmpty) return;
     state = state.copyWith(isLoadingMore: true, hasMore: true);
     _lastId = null; 
     try {
       final documents = await fetchPage([Query.limit(_limit)]);
-      final newItems = documents.map(fromDocument).toList();
+      
+      // Filter items immediately after fetching
+      final newItems = documents
+          .map(fromDocument)
+          .where((item) => !shouldFilter(item)) 
+          .toList();
+
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
       state = state.copyWith(
         items: newItems,
         isLoadingMore: false,
-        hasMore: newItems.length == _limit,
+        hasMore: documents.length == _limit, // Check raw doc count for hasMore
       );
     } catch (e) {
       state = state.copyWith(isLoadingMore: false, hasMore: false);
@@ -65,9 +76,14 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
     _lastId = null; 
     try {
       final documents = await fetchPage([Query.limit(_limit)]);
-      final newItems = documents.map(fromDocument).toList();
+      
+      final newItems = documents
+          .map(fromDocument)
+          .where((item) => !shouldFilter(item))
+          .toList();
+
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
-      state = state.copyWith(items: newItems, isLoadingMore: false, hasMore: newItems.length == _limit);
+      state = state.copyWith(items: newItems, isLoadingMore: false, hasMore: documents.length == _limit);
     } catch (e) {
       print("Error refreshing: $e");
     }
@@ -78,9 +94,14 @@ abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>
     state = state.copyWith(isLoadingMore: true);
     try {
       final documents = await fetchPage([Query.limit(_limit), Query.cursorAfter(_lastId!)]);
-      final newItems = documents.map(fromDocument).toList();
+      
+      final newItems = documents
+          .map(fromDocument)
+          .where((item) => !shouldFilter(item))
+          .toList();
+
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
-      state = state.copyWith(items: [...state.items, ...newItems], isLoadingMore: false, hasMore: newItems.length == _limit);
+      state = state.copyWith(items: [...state.items, ...newItems], isLoadingMore: false, hasMore: documents.length == _limit);
     } catch (e) {
       state = state.copyWith(isLoadingMore: false, hasMore: false);
       print("Error fetching more: $e");
@@ -93,7 +114,28 @@ final databasesProvider = Provider((ref) => AppwriteClient.databases);
 
 class VideosListNotifier extends PaginatedListNotifier<Video> {
   VideosListNotifier(super.ref) { fetchFirstBatch(); }
+  
   @override Video fromDocument(Document doc) => Video.fromAppwrite(doc);
+  
+  // --- NEW: Filter Logic ---
+  @override
+  bool shouldFilter(Video video) {
+    final user = ref.read(authProvider).user;
+    if (user == null) return false;
+
+    final prefs = user.prefs.data;
+    final ignoredVideos = (prefs['ignoredVideos'] as List<dynamic>?)?.cast<String>() ?? [];
+    final blockedCreators = (prefs['blockedCreators'] as List<dynamic>?)?.cast<String>() ?? [];
+
+    if (ignoredVideos.contains(video.id)) return true;
+    // Assuming video.userId exists. If 'creatorId' is the field, use that.
+    // Based on previous context, we use 'userId' stored in video document usually.
+    // If not available in model, we might need to rely only on video ID for now.
+    // if (blockedCreators.contains(video.userId)) return true; 
+    
+    return false;
+  }
+
   @override Future<List<Document>> fetchPage(List<String> queries) async {
     return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
       Query.notEqual('category', 'shorts'), Query.equal('adminStatus', 'approved'), Query.orderDesc('\$createdAt'), ...queries])).documents;
@@ -136,7 +178,7 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
       Query.equal('userId', user.$id), Query.orderDesc('\$createdAt'), ...queries])).documents;
   }
 }
-// REMOVED: paginatedLikedVideosProvider
+
 final paginatedHistoryProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdHistory));
 final paginatedWatchLaterProvider = StateNotifierProvider<PaginatedLinkNotifier, PaginationState<Document>>((ref) => PaginatedLinkNotifier(ref, collectionId: AppwriteClient.collectionIdWatchLater));
 

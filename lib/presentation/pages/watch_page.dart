@@ -44,10 +44,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
   Future<void> _initPlayer(model.Video video) async {
     if (_isPlayerInitialized) return;
-    String url = video.compressionStatus == 'Done' ? (video.url720p ?? video.videoUrl) : video.videoUrl;
+    
+    // --- CHANGED: Use 360p if compressed (for speed), else fallback to original ---
+    String url = video.compressionStatus == 'Done' 
+        ? (video.url360p ?? video.videoUrl) 
+        : video.videoUrl;
+
+    // Handle Appwrite File IDs (if not a full URL)
     if (!url.startsWith('http')) {
       url = AppwriteClient.storage.getFileView(bucketId: AppwriteClient.bucketIdVideos, fileId: url).toString();
     }
+
     await _player.open(Media(url));
     if (mounted) setState(() => _isPlayerInitialized = true);
   }
@@ -90,7 +97,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: Text("${NumberFormat.compact().format(video.viewCount)} views • ${timeago.format(video.createdAt)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       ),
-                      _buildActionRow(video, isSaved), // Removed isLiked
+                      _buildActionRow(video, isSaved), 
                       const Divider(color: Colors.white10),
                       _buildCreatorRow(video, isFollowing),
                       const Divider(color: Colors.white10),

@@ -1,8 +1,11 @@
+// lib/presentation/widgets/video_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:ofgconnects/models/video.dart';
+import 'package:ofgconnects/logic/auth_provider.dart';
+import 'package:ofgconnects/logic/video_provider.dart'; // Import to refresh list
 
 class VideoCard extends ConsumerWidget {
   final Video video;
@@ -17,7 +20,6 @@ class VideoCard extends ConsumerWidget {
     return GestureDetector(
       onTap: () {
         if (isShorts) {
-          // Use push to maintain navigation history
           context.push('/shorts?id=${video.id}');
         } else {
           context.push('/watch/${video.id}');
@@ -89,33 +91,38 @@ class VideoCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                // --- ADDED: YouTube Style Menu for "Not Interested" / "Report" ---
+                // --- Updated: Functional Menu ---
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
-                  color: const Color(0xFF282828), // Dark grey background like YouTube
+                  color: const Color(0xFF282828), 
                   elevation: 4,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  onSelected: (value) {
+                  onSelected: (value) async {
                     if (value == 'not_interested') {
-                      // Fake "Not Interested" logic to pass review
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Video removed. We will tune your recommendations.'),
+                      await ref.read(authProvider.notifier).addToIgnoredList(videoId: video.id);
+                      // Trigger a refresh on the list so the item disappears
+                      ref.read(videosListProvider.notifier).refresh();
+                      
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Video removed. We will tune your recommendations.')),
+                        );
+                      }
+                    } else if (value == 'block') {
+                       // Assuming we might have a userId on the video object, otherwise just warn
+                       // await ref.read(authProvider.notifier).addToIgnoredList(creatorId: video.userId);
+                       // ref.read(videosListProvider.notifier).refresh();
+                       
+                       ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("You won't see videos from ${video.creatorName} again (Pending ID implementation)."),
                         ),
                       );
                     } else if (value == 'report') {
-                      // Fake "Report" logic to pass review
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Thanks for reporting. We will review this content.'),
                           backgroundColor: Colors.green,
-                        ),
-                      );
-                    } else if (value == 'block') {
-                       // Fake "Don't recommend channel" logic
-                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('You won\'t see videos from ${video.creatorName} again.'),
                         ),
                       );
                     }
@@ -153,7 +160,6 @@ class VideoCard extends ConsumerWidget {
                     ),
                   ],
                 ),
-                // -------------------------------------------------------------
               ],
             ),
           ),

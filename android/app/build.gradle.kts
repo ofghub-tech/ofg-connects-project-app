@@ -29,17 +29,11 @@ android {
     }
 
     defaultConfig {
-<<<<<<< HEAD
         applicationId = "com.ofghub.ofgconnects"
-        minSdk = flutter.minSdkVersion // Explicitly set for media_kit
-=======
-        // UPDATED: Unique ID for the Play Store
-        applicationId = "com.ofghub.ofgconnects" 
         
-        // FIX: Set explicitly to 21 for video_compress and media_kit support
+        // Explicitly set for media_kit and video_compress support
         minSdk = flutter.minSdkVersion 
         
->>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

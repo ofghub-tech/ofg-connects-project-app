@@ -3,13 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-<<<<<<< HEAD
-// CORRECTION: Package name must match pubspec.yaml (ofgconnects)
-=======
->>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 import 'package:ofgconnects/models/video.dart' as model;
 import 'package:ofgconnects/logic/shorts_provider.dart';
 import 'package:ofgconnects/presentation/pages/shorts_page.dart';
+import 'package:ofgconnects/api/appwrite_client.dart'; // Added Import
 
 class ShortsPlayer extends ConsumerStatefulWidget {
   final model.Video video;
@@ -48,11 +45,22 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   }
 
   Future<void> _initPlayer() async {
-    // FIX: Using videoUrl directly for speed, as requested.
-    // Ensure your database contains the full, valid URL.
     try {
-      await _player.open(Media(widget.video.videoUrl), play: false); 
-      await _player.setPlaylistMode(PlaylistMode.loop); // Loops video automatically
+      // --- CHANGED: Use 360p if compressed (for speed), else fallback to original ---
+      String url = widget.video.compressionStatus == 'Done' 
+          ? (widget.video.url360p ?? widget.video.videoUrl) 
+          : widget.video.videoUrl;
+
+      // ADDED: Handle Appwrite File IDs if URL doesn't start with http
+      if (!url.startsWith('http')) {
+        url = AppwriteClient.storage.getFileView(
+          bucketId: AppwriteClient.bucketIdVideos, 
+          fileId: url
+        ).toString();
+      }
+
+      await _player.open(Media(url), play: false); 
+      await _player.setPlaylistMode(PlaylistMode.loop); 
 
       if (mounted) {
         setState(() => _isInitialized = true);
@@ -72,18 +80,16 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Listen for swipe changes (Auto play/pause)
     ref.listen(activeShortsIndexProvider, (prev, next) {
       if (!_isInitialized) return;
       if (next == widget.index) {
         _player.play();
       } else {
         _player.pause();
-        _player.seek(Duration.zero); // Reset position
+        _player.seek(Duration.zero); 
       }
     });
 
-    // 2. Listen for manual play/pause tap
     ref.listen(shortsPlayPauseProvider(widget.video.id), (prev, isPlaying) {
       if (isPlaying) {
         _player.play();
@@ -91,7 +97,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
         _player.pause();
       }
       
-      // Temporary animation overlay
       if (mounted) {
         setState(() => _showPauseIcon = true);
         Future.delayed(const Duration(milliseconds: 500), () {
@@ -107,7 +112,6 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
           color: Colors.black,
           child: Center(
             child: _isInitialized
-                // FIX: IgnorePointer prevents the Video widget from stealing swipes
                 ? IgnorePointer(
                     child: Video(
                       controller: _controller,

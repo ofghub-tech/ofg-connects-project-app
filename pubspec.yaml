@@ -35,8 +35,8 @@ dependencies:
   media_kit_libs_video: ^1.0.4
   
   # For Upload Preview (UI specific)
-  video_player: ^2.8.6  # <--- ADDED BACK
-  chewie: ^1.8.1        # <--- ADDED BACK
+  video_player: ^2.8.6
+  chewie: ^1.8.1
   
   video_thumbnail: ^0.5.3
   path_provider: ^2.1.2
@@ -63,11 +63,7 @@ dev_dependencies:
   custom_lint: ^0.6.4
   riverpod_lint: ^2.3.10
   flutter_launcher_icons: ^0.14.4
-<<<<<<< HEAD
 
-=======
-  
->>>>>>> ae3527dc080370e17b52e3164c73699c33084bda
 flutter:
   uses-material-design: true
   assets:

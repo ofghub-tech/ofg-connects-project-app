@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects/logic/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart'; // Import url_launcher
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -103,14 +104,17 @@ class SettingsPage extends ConsumerWidget {
               color: Colors.red[50]!.withOpacity(0.05),
               child: ListTile(
                 leading: const Icon(Icons.delete_forever, color: Colors.red),
-                title: const Text("Delete Account", style: TextStyle(color: Colors.red)),
-                subtitle: const Text("Permanently delete your account and all data"),
+                title: const Text("Request Account Deletion", style: TextStyle(color: Colors.red)),
+                subtitle: const Text("Send a request to permanently delete your account"),
                 onTap: () {
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text("Delete Account?"),
-                      content: const Text("This action cannot be undone. All your videos and data will be permanently removed."),
+                      content: const Text(
+                        "This will open your email client to request account deletion. "
+                        "Your account and data will be permanently deleted within 30 days."
+                      ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
@@ -119,10 +123,37 @@ class SettingsPage extends ConsumerWidget {
                         TextButton(
                           onPressed: () async {
                             Navigator.pop(context); // Close Dialog
-                            Navigator.pop(context); // Close Settings Page
-                            await ref.read(authProvider.notifier).deleteAccount();
+                            
+                            // Construct the email
+                            final String subject = Uri.encodeComponent("Account Deletion Request: ${user.name}");
+                            final String body = Uri.encodeComponent(
+                              "To OFG Tech Hub,\n\n"
+                              "I request the permanent deletion of my account and all associated data.\n\n"
+                              "Account Details:\n"
+                              "User ID: ${user.$id}\n"
+                              "Email: ${user.email}\n"
+                              "Name: ${user.name}\n\n"
+                              "Thank you."
+                            );
+                            
+                            final Uri mailUri = Uri.parse("mailto:ofgtechhub@gmail.com?subject=$subject&body=$body");
+
+                            try {
+                              if (await canLaunchUrl(mailUri)) {
+                                await launchUrl(mailUri);
+                              } else {
+                                // Fallback if mailto fails (rare, but good practice)
+                                await launchUrl(mailUri, mode: LaunchMode.externalApplication);
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("Could not open email client: $e")),
+                                );
+                              }
+                            }
                           },
-                          child: const Text("Delete", style: TextStyle(color: Colors.red)),
+                          child: const Text("Send Request", style: TextStyle(color: Colors.red)),
                         ),
                       ],
                     ),

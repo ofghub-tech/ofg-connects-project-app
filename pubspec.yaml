@@ -1,7 +1,7 @@
 name: ofgconnects
 description: "A Christian Social media app."
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -63,6 +63,7 @@ dev_dependencies:
   custom_lint: ^0.6.4
   riverpod_lint: ^2.3.10
   flutter_launcher_icons: ^0.14.4
+  url_launcher: ^6.3.0
 
 flutter:
   uses-material-design: true

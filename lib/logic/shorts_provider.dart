@@ -6,18 +6,18 @@ import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:ofgconnects/logic/video_provider.dart'; 
 import 'package:ofgconnects/models/video.dart';
 
-// 1. TRACKS WHICH VIDEO IS CURRENTLY ACTIVE (SCROLL POSITION)
+// 1. TRACKS ACTIVE VIDEO INDEX
 final activeShortsIndexProvider = StateProvider<int>((ref) => 0);
 
-// 2. NEW: TRACK PLAY/PAUSE STATE PER VIDEO
+// 2. [MOVED HERE] TRACK PLAY/PAUSE STATE
+// This fixes the circular import error
 final shortsPlayPauseProvider = StateProvider.family<bool, String>((ref, id) => true);
 
-// 3. PROVIDER FOR THE LIST OF SHORTS
+// 3. SHORTS LIST PROVIDER
 final shortsListProvider = StateNotifierProvider<ShortsListNotifier, PaginationState<Video>>((ref) {
   return ShortsListNotifier(ref);
 });
 
-// 4. THE NOTIFIER CLASS
 class ShortsListNotifier extends PaginatedListNotifier<Video> {
   ShortsListNotifier(super.ref);
 
@@ -42,11 +42,7 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
   Future<void> init(String? startWithVideoId) async {
     if (state.items.isNotEmpty && startWithVideoId == null) return;
 
-    state = PaginationState(
-      items: [], 
-      isLoadingMore: true,
-      hasMore: true
-    );
+    state = PaginationState(items: [], isLoadingMore: true, hasMore: true);
 
     if (startWithVideoId != null) {
       try {
@@ -66,7 +62,6 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
         
         final List<Document> nextDocs = await fetchPage([]); 
         final List<Video> nextVideos = nextDocs.map((d) => fromDocument(d)).toList();
-
         nextVideos.removeWhere((v) => v.id == startWithVideoId);
 
         state = state.copyWith(
@@ -75,7 +70,6 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
         );
 
       } catch (e) {
-        print("Error fetching deep linked short: $e");
         await fetchFirstBatch();
       }
     } else {

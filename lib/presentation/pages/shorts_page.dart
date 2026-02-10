@@ -11,6 +11,8 @@ import 'package:ofgconnects/models/video.dart';
 import 'package:ofgconnects/presentation/widgets/shorts_player.dart';
 import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
 
+// NOTE: shortsPlayPauseProvider removed from here (it is now in logic/shorts_provider.dart)
+
 class ShortsPage extends ConsumerStatefulWidget {
   final String? videoId;
   const ShortsPage({super.key, this.videoId});
@@ -51,22 +53,20 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
     final bool isMainTab = widget.videoId == null || widget.videoId!.isEmpty;
 
     return PopScope(
-      // Block the system back button if we are on the main tab
       canPop: !isMainTab, 
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-
+        
         if (isMainTab) {
           // --- CRASH FIX START ---
-          // 1. Manually pause the active video to free up native resources
+          // 1. Manually pause the active video to prevent GL Context crash
           final currentIndex = ref.read(activeShortsIndexProvider);
           if (state.items.isNotEmpty) {
             final currentVideoId = state.items[currentIndex % state.items.length].id;
-            // Force pause via provider logic
             ref.read(shortsPlayPauseProvider(currentVideoId).notifier).state = false;
           }
 
-          // 2. Schedule navigation for the NEXT frame to allow safe disposal
+          // 2. Navigate SAFELY in the next frame
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) {
                context.go('/home');
@@ -138,6 +138,7 @@ class _ShortsItem extends ConsumerWidget {
             child: ShortsPlayer(key: ValueKey(video.id), video: video, index: index),
           ),
         ),
+        
         Positioned.fill(
           child: IgnorePointer(
             child: Container(
@@ -152,7 +153,7 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // ACTION BUTTONS
+        // Buttons
         Positioned(
           right: 12,
           bottom: bottomOffset + 60, 
@@ -174,7 +175,7 @@ class _ShortsItem extends ConsumerWidget {
           ),
         ),
 
-        // INFO (Bottom Left)
+        // Info
         Positioned(
           left: 16,
           right: 80,

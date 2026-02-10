@@ -1,3 +1,4 @@
+// lib/presentation/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +26,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.initState();
 
     _scrollController.addListener(() {
+      // Trigger fetch earlier (300px from bottom) for smoother infinite scroll
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
         ref.read(videosListProvider.notifier).fetchMore();
       }
@@ -39,7 +41,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(shortsListProvider.notifier).fetchFirstBatch();
       ref.read(videosListProvider.notifier).fetchFirstBatch();
-      // Status fetch removed
     });
   }
 
@@ -54,7 +55,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     await Future.wait([
       ref.read(videosListProvider.notifier).refresh(),
       ref.read(shortsListProvider.notifier).refresh(),
-      // Status refresh removed
     ]);
   }
 
@@ -62,9 +62,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final shortsState = ref.watch(shortsListProvider);
     final videosState = ref.watch(videosListProvider);
-    // Status watcher removed
     
-    const int frequency = 2; 
+    // Config: How many items between ads?
+    const int adFrequency = 6; 
 
     return Scaffold(
       body: RefreshIndicator(
@@ -76,14 +76,14 @@ class _HomePageState extends ConsumerState<HomePage> {
           controller: _scrollController,
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // --- STATUS SECTION REMOVED ---
-
+            
+            // --- HEADER & SHORTS SECTION ---
             SliverToBoxAdapter(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 12), // Adjusted top padding
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
                     child: Row(
                       children: [
                         const Icon(Icons.bolt_rounded, color: Colors.blueAccent),
@@ -139,6 +139,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ],
               ),
             ),
+
+            // --- MAIN FEED SECTION ---
             if (videosState.items.isEmpty && videosState.isLoadingMore)
               const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
             else if (videosState.items.isEmpty)
@@ -152,17 +154,25 @@ class _HomePageState extends ConsumerState<HomePage> {
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    int videoIndex = index - (index ~/ (frequency + 1));
-                    bool isAdSlot = (index + 1) % (frequency + 1) == 0;
-
-                    if (videoIndex >= videosState.items.length) {
-                       return videosState.isLoadingMore
-                          ? const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator()))
-                          : const SizedBox(height: 100); 
+                    // Logic: Insert an ad every 'adFrequency' items, but skip the very first slot
+                    // Visual Sequence: Video, Video, Video, Video, Video, Video, AD, Video...
+                    
+                    if (index > 0 && index % adFrequency == 0) {
+                      return const FeedAdCard();
                     }
 
-                    if (isAdSlot) {
-                      return const FeedAdCard(); // Added const if applicable
+                    // Calculate the true index in the data list
+                    // We subtract the number of ads that have appeared so far
+                    final int adsBefore = index ~/ adFrequency;
+                    final int videoIndex = index - adsBefore;
+
+                    // SAFETY CHECK: Ensure we don't go out of bounds
+                    if (videoIndex >= videosState.items.length) {
+                       // We are at the bottom. Show spinner if loading, else blank.
+                       if (videosState.isLoadingMore) {
+                          return const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator()));
+                       }
+                       return const SizedBox(height: 100); // Padding at bottom
                     }
 
                     return AnimateInEffect(
@@ -170,7 +180,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       child: VideoCard(video: videosState.items[videoIndex]),
                     );
                   },
-                  childCount: videosState.items.length + (videosState.items.length ~/ frequency) + 1,
+                  // Calculate total count: Videos + Ads + 1 (for potential bottom loader)
+                  childCount: videosState.items.length + (videosState.items.length ~/ adFrequency) + 1,
                 ),
               ),
           ],

@@ -5,8 +5,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:ofgconnects/models/video.dart' as model;
 import 'package:ofgconnects/logic/shorts_provider.dart';
-import 'package:ofgconnects/presentation/pages/shorts_page.dart';
-import 'package:ofgconnects/api/appwrite_client.dart'; // Added Import
+import 'package:ofgconnects/api/appwrite_client.dart';
 
 class ShortsPlayer extends ConsumerStatefulWidget {
   final model.Video video;
@@ -46,12 +45,12 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   Future<void> _initPlayer() async {
     try {
-      // --- CHANGED: Use 360p if compressed (for speed), else fallback to original ---
+      // Use 360p if available/ready, otherwise original
       String url = widget.video.compressionStatus == 'Done' 
           ? (widget.video.url360p ?? widget.video.videoUrl) 
           : widget.video.videoUrl;
 
-      // ADDED: Handle Appwrite File IDs if URL doesn't start with http
+      // Handle Appwrite File IDs if not a direct HTTP link
       if (!url.startsWith('http')) {
         url = AppwriteClient.storage.getFileView(
           bucketId: AppwriteClient.bucketIdVideos, 
@@ -62,6 +61,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
       await _player.open(Media(url), play: false); 
       await _player.setPlaylistMode(PlaylistMode.loop); 
 
+      // FIX: Robust mounted check
       if (mounted) {
         setState(() => _isInitialized = true);
         _checkAutoPlay();
@@ -72,6 +72,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   }
 
   void _checkAutoPlay() {
+    // Check if this video should be playing based on the active index
     final activeIndex = ref.read(activeShortsIndexProvider);
     if (activeIndex == widget.index) {
       _player.play();

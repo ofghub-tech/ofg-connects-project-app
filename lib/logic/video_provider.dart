@@ -31,80 +31,118 @@ class PaginationState<T> {
   }
 }
 
-// --- 2. GENERIC PAGINATED NOTIFIER ---
+// --- 2. ROBUST PAGINATED NOTIFIER ---
 abstract class PaginatedListNotifier<T> extends StateNotifier<PaginationState<T>> {
   PaginatedListNotifier(this.ref) : super(PaginationState<T>());
 
   final Ref ref;
-  final int _limit = 10; 
+  final int _limit = 15; // Increased limit slightly to reduce network chatter
   String? _lastId;
 
+  // Abstract methods to be implemented by children
   Future<List<Document>> fetchPage(List<String> queries);
   T fromDocument(Document doc);
+  
+  // Override this to implement specific filtering (e.g. blocked users)
+  bool shouldFilter(T item) => false;
 
-  // --- NEW: Filter Helper ---
-  bool shouldFilter(T item) {
-    return false; // Override in subclasses
-  }
+  // --- SAFE GUARD: MAX RECURSION ---
+  // Prevents infinite loops if the database is 100% full of blocked content
+  int _recursionDepth = 0;
+  final int _maxRecursion = 5; 
 
   Future<void> fetchFirstBatch() async {
     if (state.items.isNotEmpty) return;
+    
     state = state.copyWith(isLoadingMore: true, hasMore: true);
-    _lastId = null; 
-    try {
-      final documents = await fetchPage([Query.limit(_limit)]);
-      
-      // Filter items immediately after fetching
-      final newItems = documents
-          .map(fromDocument)
-          .where((item) => !shouldFilter(item)) 
-          .toList();
-
-      _lastId = documents.isNotEmpty ? documents.last.$id : null;
-      state = state.copyWith(
-        items: newItems,
-        isLoadingMore: false,
-        hasMore: documents.length == _limit, // Check raw doc count for hasMore
-      );
-    } catch (e) {
-      state = state.copyWith(isLoadingMore: false, hasMore: false);
-      print("Error fetching first batch: $e");
-    }
+    _lastId = null;
+    _recursionDepth = 0; 
+    
+    await _fetchRecursive(isFirstLoad: true);
   }
 
   Future<void> refresh() async {
-    _lastId = null; 
-    try {
-      final documents = await fetchPage([Query.limit(_limit)]);
-      
-      final newItems = documents
-          .map(fromDocument)
-          .where((item) => !shouldFilter(item))
-          .toList();
-
-      _lastId = documents.isNotEmpty ? documents.last.$id : null;
-      state = state.copyWith(items: newItems, isLoadingMore: false, hasMore: documents.length == _limit);
-    } catch (e) {
-      print("Error refreshing: $e");
-    }
+    _lastId = null;
+    _recursionDepth = 0;
+    
+    // Pass isFirstLoad=true to replace the list entirely
+    await _fetchRecursive(isFirstLoad: true);
   }
 
   Future<void> fetchMore() async {
+    // Debounce: Don't fetch if already fetching or no more items
     if (state.isLoadingMore || !state.hasMore || _lastId == null) return;
+    
     state = state.copyWith(isLoadingMore: true);
-    try {
-      final documents = await fetchPage([Query.limit(_limit), Query.cursorAfter(_lastId!)]);
-      
-      final newItems = documents
-          .map(fromDocument)
-          .where((item) => !shouldFilter(item))
-          .toList();
+    _recursionDepth = 0;
 
+    await _fetchRecursive(isFirstLoad: false);
+  }
+
+  /// Internal Helper: Handles "Hollow Page" logic safely
+  Future<void> _fetchRecursive({required bool isFirstLoad}) async {
+    try {
+      // 1. Prepare Queries
+      final List<String> queries = [Query.limit(_limit)];
+      if (_lastId != null) {
+        queries.add(Query.cursorAfter(_lastId!));
+      }
+
+      // 2. Network Call
+      final documents = await fetchPage(queries);
+
+      // 3. Filter Logic
+      final List<T> validItems = [];
+      for (var doc in documents) {
+        final item = fromDocument(doc);
+        if (!shouldFilter(item)) {
+          validItems.add(item);
+        }
+      }
+
+      // 4. Update Cursor (Even if filtered, we moved past these docs)
       _lastId = documents.isNotEmpty ? documents.last.$id : null;
-      state = state.copyWith(items: [...state.items, ...newItems], isLoadingMore: false, hasMore: documents.length == _limit);
+      
+      // 5. Determine if Server has more data
+      // Note: If we got fewer docs than limit, server is exhausted.
+      final bool serverHasMore = documents.length == _limit;
+
+      // --- CRITICAL LOGIC: HOLLOW PAGE HANDLING ---
+      // If we got data from server, but filtered EVERYTHING out (validItems is empty),
+      // we MUST fetch the next page immediately, unless server is empty.
+      if (validItems.isEmpty && serverHasMore) {
+        if (_recursionDepth < _maxRecursion) {
+          _recursionDepth++;
+          print("⚠️ Hollow Page detected (All items filtered). Fetching next batch internally... (Depth: $_recursionDepth)");
+          await _fetchRecursive(isFirstLoad: isFirstLoad); // RECURSIVE CALL
+          return;
+        } else {
+           print("🛑 Max recursion reached. Stopping fetch to save battery.");
+           // Stop loading, keep existing data.
+           state = state.copyWith(isLoadingMore: false, hasMore: true); 
+           return;
+        }
+      }
+
+      // 6. Update State
+      if (isFirstLoad) {
+        state = state.copyWith(
+          items: validItems,
+          isLoadingMore: false,
+          hasMore: serverHasMore,
+        );
+      } else {
+        state = state.copyWith(
+          items: [...state.items, ...validItems],
+          isLoadingMore: false,
+          hasMore: serverHasMore,
+        );
+      }
+
     } catch (e) {
+      print("Error in pagination: $e");
+      // On error, stop loading but preserve existing items
       state = state.copyWith(isLoadingMore: false, hasMore: false);
-      print("Error fetching more: $e");
     }
   }
 }
@@ -117,28 +155,36 @@ class VideosListNotifier extends PaginatedListNotifier<Video> {
   
   @override Video fromDocument(Document doc) => Video.fromAppwrite(doc);
   
-  // --- NEW: Filter Logic ---
   @override
   bool shouldFilter(Video video) {
     final user = ref.read(authProvider).user;
     if (user == null) return false;
 
+    // Use safe access "?" to avoid crashes if keys don't exist
     final prefs = user.prefs.data;
-    final ignoredVideos = (prefs['ignoredVideos'] as List<dynamic>?)?.cast<String>() ?? [];
-    final blockedCreators = (prefs['blockedCreators'] as List<dynamic>?)?.cast<String>() ?? [];
-
-    if (ignoredVideos.contains(video.id)) return true;
-    // Assuming video.userId exists. If 'creatorId' is the field, use that.
-    // Based on previous context, we use 'userId' stored in video document usually.
-    // If not available in model, we might need to rely only on video ID for now.
-    // if (blockedCreators.contains(video.userId)) return true; 
     
+    // Check Blocked Creators 
+    final blockedCreators = (prefs['blockedCreators'] as List<dynamic>?)?.cast<String>() ?? [];
+    if (blockedCreators.contains(video.creatorId)) return true; 
+    
+    // Check Ignored Videos
+    final ignoredVideos = (prefs['ignoredVideos'] as List<dynamic>?)?.cast<String>() ?? [];
+    if (ignoredVideos.contains(video.id)) return true;
+
     return false;
   }
 
   @override Future<List<Document>> fetchPage(List<String> queries) async {
-    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
-      Query.notEqual('category', 'shorts'), Query.equal('adminStatus', 'approved'), Query.orderDesc('\$createdAt'), ...queries])).documents;
+    return (await ref.read(databasesProvider).listDocuments(
+      databaseId: AppwriteClient.databaseId, 
+      collectionId: AppwriteClient.collectionIdVideos, 
+      queries: [
+        Query.notEqual('category', 'shorts'), 
+        Query.equal('adminStatus', 'approved'), 
+        Query.orderDesc('\$createdAt'), 
+        ...queries
+      ]
+    )).documents;
   }
 }
 final videosListProvider = StateNotifierProvider<VideosListNotifier, PaginationState<Video>>((ref) => VideosListNotifier(ref));
@@ -149,8 +195,16 @@ class UserLongVideosNotifier extends PaginatedListNotifier<Video> {
   @override Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
-    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
-      Query.equal('userId', user.$id), Query.notEqual('category', 'shorts'), Query.orderDesc('\$createdAt'), ...queries])).documents;
+    return (await ref.read(databasesProvider).listDocuments(
+      databaseId: AppwriteClient.databaseId, 
+      collectionId: AppwriteClient.collectionIdVideos, 
+      queries: [
+        Query.equal('userId', user.$id), 
+        Query.notEqual('category', 'shorts'), 
+        Query.orderDesc('\$createdAt'), 
+        ...queries
+      ]
+    )).documents;
   }
 }
 final paginatedUserLongVideosProvider = StateNotifierProvider<UserLongVideosNotifier, PaginationState<Video>>((ref) => UserLongVideosNotifier(ref));
@@ -161,8 +215,16 @@ class UserShortsNotifier extends PaginatedListNotifier<Video> {
   @override Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
-    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: AppwriteClient.collectionIdVideos, queries: [
-      Query.equal('userId', user.$id), Query.equal('category', 'shorts'), Query.orderDesc('\$createdAt'), ...queries])).documents;
+    return (await ref.read(databasesProvider).listDocuments(
+      databaseId: AppwriteClient.databaseId, 
+      collectionId: AppwriteClient.collectionIdVideos, 
+      queries: [
+        Query.equal('userId', user.$id), 
+        Query.equal('category', 'shorts'), 
+        Query.orderDesc('\$createdAt'), 
+        ...queries
+      ]
+    )).documents;
   }
 }
 final paginatedUserShortsProvider = StateNotifierProvider<UserShortsNotifier, PaginationState<Video>>((ref) => UserShortsNotifier(ref));
@@ -174,8 +236,15 @@ class PaginatedLinkNotifier extends PaginatedListNotifier<Document> {
   @override Future<List<Document>> fetchPage(List<String> queries) async {
     final user = ref.read(authProvider).user;
     if (user == null) return [];
-    return (await ref.read(databasesProvider).listDocuments(databaseId: AppwriteClient.databaseId, collectionId: collectionId, queries: [
-      Query.equal('userId', user.$id), Query.orderDesc('\$createdAt'), ...queries])).documents;
+    return (await ref.read(databasesProvider).listDocuments(
+      databaseId: AppwriteClient.databaseId, 
+      collectionId: collectionId, 
+      queries: [
+        Query.equal('userId', user.$id), 
+        Query.orderDesc('\$createdAt'), 
+        ...queries
+      ]
+    )).documents;
   }
 }
 

@@ -1,3 +1,4 @@
+// lib/presentation/pages/upload_page.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,8 +52,11 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     _titleController.dispose();
     _descriptionController.dispose();
     _tagsController.dispose();
-    _videoController?.dispose();
+    
+    // FIX: Dispose Chewie FIRST to prevent "VideoPlayerController used after disposed" error
     _chewieController?.dispose();
+    _videoController?.dispose();
+    
     super.dispose();
   }
 
@@ -75,10 +79,10 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   }
 
   Future<void> _initializePlayer(File file) async {
-    _videoController?.dispose();
     _chewieController?.dispose();
-    _videoController = null;
+    _videoController?.dispose();
     _chewieController = null;
+    _videoController = null;
 
     try {
       _videoController = VideoPlayerController.file(file);
@@ -104,7 +108,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
         },
       );
       
-      setState(() {}); 
+      if (mounted) setState(() {}); 
     } catch (e) {
       print("Error initializing video player: $e");
     }
@@ -119,11 +123,11 @@ class _UploadPageState extends ConsumerState<UploadPage> {
         video: video.path,
         thumbnailPath: tempDir.path,
         imageFormat: ImageFormat.JPEG,
-        maxHeight: 1280, // Increased quality for shorts
+        maxHeight: 1280, 
         quality: 80,
       );
 
-      if (path != null) {
+      if (path != null && mounted) {
         setState(() {
           _thumbnailFile = File(path);
         });
@@ -131,7 +135,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     } catch (e) {
       print("Error generating thumbnail: $e");
     } finally {
-      setState(() => _isGeneratingThumbnail = false);
+      if (mounted) setState(() => _isGeneratingThumbnail = false);
     }
   }
 
@@ -160,11 +164,12 @@ class _UploadPageState extends ConsumerState<UploadPage> {
 
       await _initializePlayer(file);
       
-      // Auto-detect if short based on aspect ratio
-      if (_videoController != null && _videoController!.value.aspectRatio < 1.0) {
-        setState(() {
-          _selectedCategoryLabel = 'Short Video'; // Auto-select category
-        });
+      if (_videoController != null && _videoController!.value.isInitialized) {
+        if (_videoController!.value.aspectRatio < 1.0) {
+          setState(() {
+            _selectedCategoryLabel = 'Short Video'; 
+          });
+        }
       }
 
       await _generateThumbnail(file);
@@ -190,7 +195,10 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       return;
     }
 
-    _videoController?.pause();
+    // FIX: Pause safely before uploading
+    if (_videoController != null && _videoController!.value.isPlaying) {
+       await _videoController!.pause();
+    }
 
     await ref.read(uploadProvider.notifier).uploadVideo(
       videoFile: _videoFile!,
@@ -206,7 +214,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   Widget build(BuildContext context) {
     final uploadState = ref.watch(uploadProvider);
 
-    // Determine if we should show a vertical (Shorts) layout
     bool isVerticalVideo = false;
     if (_videoController != null && _videoController!.value.isInitialized) {
       isVerticalVideo = _videoController!.value.aspectRatio < 1.0;
@@ -246,12 +253,11 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   
-                  // --- DYNAMIC VIDEO PREVIEW ---
+                  // --- VIDEO PREVIEW ---
                   GestureDetector(
                     onTap: (_videoFile == null && !uploadState.isLoading) ? _pickVideo : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      // Taller for vertical videos
                       height: isVerticalVideo ? 400 : 240, 
                       width: double.infinity,
                       decoration: BoxDecoration(
@@ -375,22 +381,20 @@ class _UploadPageState extends ConsumerState<UploadPage> {
 
                   const SizedBox(height: 24),
                   
-                  // --- DYNAMIC THUMBNAIL PREVIEW ---
+                  // --- THUMBNAIL PREVIEW ---
                   _buildLabel('Thumbnail'),
                   GestureDetector(
                     onTap: uploadState.isLoading ? null : _pickThumbnail,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      // Dynamic Height: Taller for Shorts (9:16), Shorter for Normal (16:9)
                       height: isVerticalVideo ? 260 : 160,
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.white12),
-                        // Note: Using a child Image instead of DecorationImage to control fit better
                       ),
-                      clipBehavior: Clip.hardEdge, // Ensure image doesn't bleed
+                      clipBehavior: Clip.hardEdge, 
                       child: _thumbnailFile == null
                           ? Center(
                               child: _isGeneratingThumbnail 
@@ -414,14 +418,10 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                           : Stack(
                               fit: StackFit.expand,
                               children: [
-                                // Use BoxFit.contain to show FULL image (no cropping)
-                                // Use BoxFit.cover if you want to fill the box (but might crop)
-                                // For Shorts, BoxFit.contain with a black bg is safest.
                                 Image.file(
                                   _thumbnailFile!, 
                                   fit: isVerticalVideo ? BoxFit.contain : BoxFit.cover,
                                 ),
-                                
                                 Positioned(
                                   top: 8, right: 8,
                                   child: Container(
@@ -430,15 +430,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                                     child: const Icon(Icons.edit, color: Colors.white, size: 16),
                                   ),
                                 ),
-                                if (_isGeneratingThumbnail == false && _thumbnailFile != null)
-                                  Positioned(
-                                    bottom: 8, left: 8,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                                      child: const Text("Cover Image", style: TextStyle(color: Colors.white70, fontSize: 10)),
-                                    ),
-                                  )
                               ],
                             ),
                     ),
@@ -466,6 +457,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           ),
         ),
 
+        // --- LOADING OVERLAY ---
         if (uploadState.isLoading)
           Container(
             color: Colors.black.withOpacity(0.8),

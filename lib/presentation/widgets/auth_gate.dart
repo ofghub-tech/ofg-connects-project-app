@@ -12,44 +12,56 @@ class AuthGate extends ConsumerStatefulWidget {
 }
 
 class _AuthGateState extends ConsumerState<AuthGate> {
-  bool _listenerRegistered = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    // FIX: Check immediately if we are already authenticated to avoid getting stuck
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = ref.read(authProvider);
+      if (authState.status == AuthStatus.authenticated) {
+        context.go('/home');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    if (!_listenerRegistered) {
-      _listenerRegistered = true;
+    // Listener to handle status changes (e.g. from loading -> authenticated)
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.status == AuthStatus.authenticated) {
+        context.go('/home');
+      }
+    });
 
-      ref.listen<AuthState>(authProvider, (previous, next) {
-        // Only navigate when authenticated
-        if (next.status == AuthStatus.authenticated) {
-          if (mounted) context.go('/home');
-        }
-      });
-    }
-
-    // Show relevant UI while auth state resolves.
     return Scaffold(
+      backgroundColor: const Color(0xFF0F0F0F), 
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (authState.status == AuthStatus.loading) ...[
-              const CircularProgressIndicator(),
+              const CircularProgressIndicator(color: Colors.blueAccent),
               const SizedBox(height: 16),
-              const Text('Connecting...'),
+              const Text('Connecting...', style: TextStyle(color: Colors.white54)),
             ] else if (authState.status == AuthStatus.authenticated) ...[
-              // Empty view — listener will navigate to /home
+              // We are authenticated, waiting for navigation...
               const SizedBox.shrink(),
             ] else ...[
-              // This is the error state if guest login fails
-              const Icon(Icons.error, color: Colors.red, size: 48),
+              // Error / Guest Login Failed
+              const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
               const SizedBox(height: 16),
               const Text(
-                'Failed to connect. Please restart the app.',
-                textAlign: TextAlign.center,
+                'Connection Failed',
+                style: TextStyle(color: Colors.white, fontSize: 18),
               ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => ref.read(authProvider.notifier).checkUserStatus(),
+                child: const Text("Retry"),
+              )
             ],
           ],
         ),

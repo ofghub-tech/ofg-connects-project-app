@@ -20,9 +20,7 @@ class FollowingListNotifier extends StateNotifier<PaginationState<Document>> {
     final user = ref.read(authProvider).user;
     if (user == null) return;
     
-    // Prevent double loading
     if (state.isLoadingMore) return;
-
     state = state.copyWith(isLoadingMore: true);
 
     try {
@@ -45,5 +43,43 @@ class FollowingListNotifier extends StateNotifier<PaginationState<Document>> {
       print("Error fetching following list: $e");
       state = state.copyWith(isLoadingMore: false);
     }
+  }
+
+  // FIX: Added Pagination Support
+  Future<void> fetchNextBatch() async {
+    final user = ref.read(authProvider).user;
+    if (user == null || !state.hasMore || state.isLoadingMore || state.items.isEmpty) return;
+
+    state = state.copyWith(isLoadingMore: true);
+
+    try {
+      final lastId = state.items.last.$id;
+
+      final response = await _db.listDocuments(
+        databaseId: AppwriteClient.databaseId,
+        collectionId: AppwriteClient.collectionIdSubscriptions,
+        queries: [
+          Query.equal('followerId', user.$id),
+          Query.limit(20),
+          Query.orderDesc('\$createdAt'),
+          Query.cursorAfter(lastId),
+        ],
+      );
+
+      state = state.copyWith(
+        items: [...state.items, ...response.documents],
+        isLoadingMore: false,
+        hasMore: response.documents.length == 20,
+      );
+    } catch (e) {
+      print("Error fetching more users: $e");
+      state = state.copyWith(isLoadingMore: false);
+    }
+  }
+
+  // FIX: Helper to remove item instantly from UI
+  void removeUserLocally(String followingId) {
+    final updatedItems = state.items.where((doc) => doc.data['followingId'] != followingId).toList();
+    state = state.copyWith(items: updatedItems);
   }
 }

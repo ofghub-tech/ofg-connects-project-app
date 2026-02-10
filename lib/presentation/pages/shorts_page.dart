@@ -11,8 +11,6 @@ import 'package:ofgconnects/models/video.dart';
 import 'package:ofgconnects/presentation/widgets/shorts_player.dart';
 import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
 
-final shortsPlayPauseProvider = StateProvider.family<bool, String>((ref, id) => true);
-
 class ShortsPage extends ConsumerStatefulWidget {
   final String? videoId;
   const ShortsPage({super.key, this.videoId});
@@ -50,23 +48,31 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(shortsListProvider);
-
-    // FIX: Strictly determine if we are on the Main Tab (Bottom Nav) or a Detail View.
-    // If videoId is null or empty, we are on the main Shorts tab.
     final bool isMainTab = widget.videoId == null || widget.videoId!.isEmpty;
 
     return PopScope(
-      // CRITICAL FIX: 
-      // If we are on the Main Tab, 'canPop' must be FALSE to block the app from closing.
-      // If we are viewing a specific video (from feed), 'canPop' is TRUE to let it go back naturally.
+      // Block the system back button if we are on the main tab
       canPop: !isMainTab, 
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        
-        // If the back button was blocked (because we are on the main tab),
-        // manually navigate to the Home Page.
+
         if (isMainTab) {
-          context.go('/home'); 
+          // --- CRASH FIX START ---
+          // 1. Manually pause the active video to free up native resources
+          final currentIndex = ref.read(activeShortsIndexProvider);
+          if (state.items.isNotEmpty) {
+            final currentVideoId = state.items[currentIndex % state.items.length].id;
+            // Force pause via provider logic
+            ref.read(shortsPlayPauseProvider(currentVideoId).notifier).state = false;
+          }
+
+          // 2. Schedule navigation for the NEXT frame to allow safe disposal
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+               context.go('/home');
+            }
+          });
+          // --- CRASH FIX END ---
         }
       },
       child: Scaffold(

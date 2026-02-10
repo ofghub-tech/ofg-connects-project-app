@@ -1,10 +1,10 @@
 // lib/presentation/widgets/shorts_player.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:media_kit/media_kit.dart'; 
+import 'package:media_kit_video/media_kit_video.dart'; 
 import 'package:ofgconnects/models/video.dart' as model;
-import 'package:ofgconnects/logic/shorts_provider.dart';
+import 'package:ofgconnects/logic/shorts_provider.dart'; 
 import 'package:ofgconnects/api/appwrite_client.dart';
 
 class ShortsPlayer extends ConsumerStatefulWidget {
@@ -26,6 +26,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   @override
   void initState() {
     super.initState();
+    // 1. Initialize Player
     _player = Player();
     _controller = VideoController(
       _player,
@@ -39,18 +40,19 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
 
   @override
   void dispose() {
+    // 2. Dispose Player safely
     _player.dispose();
     super.dispose();
   }
 
   Future<void> _initPlayer() async {
     try {
-      // Use 360p if available/ready, otherwise original
+      // 3. Resolve URL (Handle compression & Appwrite File IDs)
       String url = widget.video.compressionStatus == 'Done' 
           ? (widget.video.url360p ?? widget.video.videoUrl) 
           : widget.video.videoUrl;
 
-      // Handle Appwrite File IDs if not a direct HTTP link
+      // If it's a File ID (no http), fetch the view URL
       if (!url.startsWith('http')) {
         url = AppwriteClient.storage.getFileView(
           bucketId: AppwriteClient.bucketIdVideos, 
@@ -58,10 +60,10 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
         ).toString();
       }
 
+      // 4. Open Media
       await _player.open(Media(url), play: false); 
       await _player.setPlaylistMode(PlaylistMode.loop); 
 
-      // FIX: Robust mounted check
       if (mounted) {
         setState(() => _isInitialized = true);
         _checkAutoPlay();
@@ -72,32 +74,40 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
   }
 
   void _checkAutoPlay() {
-    // Check if this video should be playing based on the active index
+    if (!_isInitialized) return;
+    
     final activeIndex = ref.read(activeShortsIndexProvider);
+    // Only play if this is the active video
     if (activeIndex == widget.index) {
       _player.play();
+    } else {
+      _player.pause();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 5. Listen: Scroll Changes (Active Index)
     ref.listen(activeShortsIndexProvider, (prev, next) {
       if (!_isInitialized) return;
       if (next == widget.index) {
         _player.play();
       } else {
         _player.pause();
-        _player.seek(Duration.zero); 
+        _player.seek(Duration.zero); // Reset when scrolling away
       }
     });
 
-    ref.listen(shortsPlayPauseProvider(widget.video.id), (prev, isPlaying) {
+    // 6. Listen: Manual Play/Pause (Tap)
+    // Explicitly typed <bool> to prevent "Object?" errors
+    ref.listen<bool>(shortsPlayPauseProvider(widget.video.id), (prev, isPlaying) {
       if (isPlaying) {
         _player.play();
       } else {
         _player.pause();
       }
       
+      // Show icon animation
       if (mounted) {
         setState(() => _showPauseIcon = true);
         Future.delayed(const Duration(milliseconds: 500), () {
@@ -105,6 +115,9 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
         });
       }
     });
+
+    // 7. Watch: UI State for Icon
+    final isPlaying = ref.watch(shortsPlayPauseProvider(widget.video.id));
 
     return Stack(
       alignment: Alignment.center,
@@ -114,6 +127,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
           child: Center(
             child: _isInitialized
                 ? IgnorePointer(
+                    // Ignore pointer to let GestureDetector in parent handle taps
                     child: Video(
                       controller: _controller,
                       fit: BoxFit.cover,
@@ -125,7 +139,7 @@ class _ShortsPlayerState extends ConsumerState<ShortsPlayer> {
         ),
         if (_showPauseIcon)
           Icon(
-            ref.read(shortsPlayPauseProvider(widget.video.id)) ? Icons.play_arrow : Icons.pause,
+            isPlaying ? Icons.play_arrow : Icons.pause,
             size: 80,
             color: Colors.white.withOpacity(0.5),
           ),

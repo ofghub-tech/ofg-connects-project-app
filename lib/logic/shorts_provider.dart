@@ -1,3 +1,4 @@
+// lib/logic/shorts_provider.dart
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,15 +6,18 @@ import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:ofgconnects/logic/video_provider.dart'; 
 import 'package:ofgconnects/models/video.dart';
 
-// 1. TRACKS WHICH VIDEO IS CURRENTLY PLAYING
+// 1. TRACKS WHICH VIDEO IS CURRENTLY ACTIVE (SCROLL POSITION)
 final activeShortsIndexProvider = StateProvider<int>((ref) => 0);
 
-// 2. PROVIDER FOR THE LIST OF SHORTS
+// 2. NEW: TRACK PLAY/PAUSE STATE PER VIDEO
+final shortsPlayPauseProvider = StateProvider.family<bool, String>((ref, id) => true);
+
+// 3. PROVIDER FOR THE LIST OF SHORTS
 final shortsListProvider = StateNotifierProvider<ShortsListNotifier, PaginationState<Video>>((ref) {
   return ShortsListNotifier(ref);
 });
 
-// 3. THE NOTIFIER CLASS
+// 4. THE NOTIFIER CLASS
 class ShortsListNotifier extends PaginatedListNotifier<Video> {
   ShortsListNotifier(super.ref);
 
@@ -35,22 +39,17 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
     return response.documents;
   }
 
-  // EXTRA: Handle Deep Linking
   Future<void> init(String? startWithVideoId) async {
-    // 1. Safety Check
     if (state.items.isNotEmpty && startWithVideoId == null) return;
 
-    // 2. [FIXED] Use 'isLoadingMore' instead of 'isLoading'
-    // This triggers the spinner because your UI checks: if items.isEmpty && isLoadingMore -> Show Spinner
     state = PaginationState(
       items: [], 
-      isLoadingMore: true, // <--- CHANGED THIS
+      isLoadingMore: true,
       hasMore: true
     );
 
     if (startWithVideoId != null) {
       try {
-        // A. Fetch the specific deep-linked video first
         final doc = await ref.read(databasesProvider).getDocument(
           databaseId: AppwriteClient.databaseId,
           collectionId: AppwriteClient.collectionIdVideos,
@@ -59,24 +58,20 @@ class ShortsListNotifier extends PaginatedListNotifier<Video> {
         
         final startVideo = Video.fromAppwrite(doc);
 
-        // B. Set state with ONLY this video initially
         state = PaginationState(
           items: [startVideo],
-          isLoadingMore: true, // <--- CHANGED THIS (Keep true while fetching batch)
+          isLoadingMore: true,
           hasMore: true,
         );
         
-        // C. Manually fetch the standard feed 
         final List<Document> nextDocs = await fetchPage([]); 
         final List<Video> nextVideos = nextDocs.map((d) => fromDocument(d)).toList();
 
-        // D. Remove duplicates
         nextVideos.removeWhere((v) => v.id == startWithVideoId);
 
-        // E. Append and update state
         state = state.copyWith(
           items: [startVideo, ...nextVideos],
-          isLoadingMore: false, // <--- Stop loading
+          isLoadingMore: false,
         );
 
       } catch (e) {

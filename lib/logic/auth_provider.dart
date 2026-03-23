@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart' as models;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:path/path.dart' as p;
@@ -134,15 +135,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         await _account.deleteSession(sessionId: 'current');
       } catch (_) {}
+
+      final safeEmail = email.trim();
+      final safeName = name.trim().isEmpty ? 'OFG User' : name.trim();
+
       await _account.create(
         userId: ID.unique(),
-        email: email.trim(),
+        email: safeEmail,
         password: password,
-        name: name.trim().isEmpty ? 'OFG User' : name.trim(),
+        name: safeName,
       );
-      await _account.createEmailPasswordSession(
-          email: email.trim(), password: password);
-      await _markPasswordAsSet();
+
+      try {
+        await _account.createEmailPasswordSession(
+          email: safeEmail,
+          password: password,
+        );
+      } catch (e) {
+        final sessionError = _readAuthError(
+          e,
+          fallback:
+              'Account created, but automatic login failed. Please sign in manually.',
+        );
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          user: null,
+          requiresPasswordSetup: false,
+          errorMessage: sessionError,
+        );
+        return;
+      }
+
+      try {
+        await _markPasswordAsSet();
+      } catch (e) {
+        debugPrint('Auth warning: could not set passwordSet pref: $e');
+      }
+
       await _refreshAuthenticatedState();
     } catch (e) {
       state = state.copyWith(
@@ -323,9 +352,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   String _readAuthError(Object error, {required String fallback}) {
     if (error is AppwriteException) {
+      debugPrint(
+          'Auth AppwriteException code=${error.code} type=${error.type} message=${error.message}');
       final msg = (error.message ?? '').trim();
       if (msg.isNotEmpty) return msg;
+
+      final type = (error.type ?? '').trim();
+      if (type.isNotEmpty) {
+        final code = error.code?.toString() ?? 'unknown';
+        return 'Auth error ($code/$type). Please verify your input and project auth settings.';
+      }
+
+      final raw = error.response?.toString().trim() ?? '';
+      if (raw.isNotEmpty) return raw;
     }
+    debugPrint('Auth generic error: $error');
     return fallback;
   }
 }

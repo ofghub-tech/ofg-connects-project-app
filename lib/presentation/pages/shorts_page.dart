@@ -1,6 +1,7 @@
 // lib/presentation/pages/shorts_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -24,6 +25,7 @@ class ShortsPage extends ConsumerStatefulWidget {
 
 class _ShortsPageState extends ConsumerState<ShortsPage> {
   late PageController _pageController;
+  Timer? _viewLogTimer;
 
   @override
   void initState() {
@@ -37,8 +39,17 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
 
   @override
   void dispose() {
+    _viewLogTimer?.cancel();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _scheduleViewLog(Video video) {
+    _viewLogTimer?.cancel();
+    // Delay view logging so network requests don't compete with initial video buffering.
+    _viewLogTimer = Timer(const Duration(seconds: 2), () {
+      ref.read(interactionProvider).logVideoView(video.id);
+    });
   }
 
   void _animateToNextPage() {
@@ -85,25 +96,24 @@ class _ShortsPageState extends ConsumerState<ShortsPage> {
                 : const Center(child: Text("No Shorts Available", style: TextStyle(color: Colors.white))))
             : PageView.builder(
                 controller: _pageController,
+                itemCount: state.items.length,
                 scrollDirection: Axis.vertical,
                 allowImplicitScrolling: false, 
                 physics: const ClampingScrollPhysics(),
                 onPageChanged: (index) {
-                  final int realIndex = index % state.items.length;
-                  ref.read(activeShortsIndexProvider.notifier).state = realIndex;
-                  ref.read(interactionProvider).logVideoView(state.items[realIndex].id);
+                  ref.read(activeShortsIndexProvider.notifier).state = index;
+                  _scheduleViewLog(state.items[index]);
                   
-                  if (realIndex >= state.items.length - 2) {
+                  if (index >= state.items.length - 2) {
                     ref.read(shortsListProvider.notifier).fetchMore();
                   }
                 },
                 itemBuilder: (context, index) {
-                  final int realIndex = index % state.items.length;
-                  final video = state.items[realIndex];
+                  final video = state.items[index];
 
                   return _ShortsItem(
                     video: video, 
-                    index: realIndex,
+                    index: index,
                     onNextPressed: _animateToNextPage,
                   );
                 },

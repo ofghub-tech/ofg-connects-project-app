@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:ofgconnects/logic/interaction_provider.dart';
 import 'package:ofgconnects/logic/subscription_provider.dart';
 import 'package:ofgconnects/logic/video_provider.dart';
+import 'package:ofgconnects/logic/video_stream_resolver.dart';
+import 'package:ofgconnects/logic/data_saver.dart';
 import 'package:ofgconnects/models/video.dart' as model;
 import 'package:ofgconnects/presentation/theme/ofg_ui.dart';
 import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
@@ -27,33 +29,130 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   late final Player _player;
   late final VideoController _controller;
   bool _isPlayerInitialized = false;
+  bool _isOpeningPlayer = false;
+  bool _isSwitchingQuality = false;
+  bool _canLoadSuggestions = false;
+  Timer? _suggestionsTimer;
+  Timer? _adaptiveTimer;
+  List<String> _adaptiveUrls = const [];
+  int _qualityIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _player = Player();
+    _player = Player(
+      configuration: PlayerConfiguration(
+        bufferSize: kDataSaverEnabled ? 256 * 1024 : 2 * 1024 * 1024,
+      ),
+    );
     _controller = VideoController(_player);
     Future.microtask(() => ref.read(interactionProvider).logVideoView(widget.videoId));
   }
 
   @override
   void dispose() {
+    _suggestionsTimer?.cancel();
+    _adaptiveTimer?.cancel();
     _player.dispose();
     super.dispose();
   }
 
-  Future<void> _initPlayer(model.Video video) async {
-    if (_isPlayerInitialized) return;
-    String url = video.compressionStatus == 'Done'
-        ? (video.url360p ?? video.videoUrl)
-        : video.videoUrl;
-    if (!url.startsWith('http')) {
-      url = AppwriteClient.storage
-          .getFileView(bucketId: AppwriteClient.bucketIdVideos, fileId: url)
-          .toString();
+  void _startAdaptiveMonitor() {
+    _adaptiveTimer?.cancel();
+    _adaptiveTimer = Timer.periodic(const Duration(seconds: 6), (_) async {
+      if (!mounted || _adaptiveUrls.length < 2 || _isSwitchingQuality) return;
+
+      // If buffering, step down quality immediately.
+      if (_player.state.buffering && _qualityIndex > 0) {
+        await _switchQuality(_qualityIndex - 1);
+        return;
+      }
+
+      // If stable playback, step up gradually (except in hard data saver mode).
+      final stablePlayback =
+          _player.state.playing &&
+          !_player.state.buffering &&
+          _player.state.position > const Duration(seconds: 12);
+      if (!kDataSaverEnabled &&
+          stablePlayback &&
+          _qualityIndex < _adaptiveUrls.length - 1) {
+        await _switchQuality(_qualityIndex + 1);
+      }
+    });
+  }
+
+  Future<void> _switchQuality(int newIndex) async {
+    if (newIndex == _qualityIndex ||
+        newIndex < 0 ||
+        newIndex >= _adaptiveUrls.length ||
+        _isSwitchingQuality) {
+      return;
     }
-    await _player.open(Media(url));
-    if (mounted) setState(() => _isPlayerInitialized = true);
+
+    _isSwitchingQuality = true;
+    final shouldPlay = _player.state.playing;
+    final resumeAt = _player.state.position;
+    try {
+      await _player
+          .open(Media(_adaptiveUrls[newIndex]), play: false)
+          .timeout(const Duration(seconds: 8));
+      if (resumeAt > Duration.zero) {
+        await _player.seek(resumeAt);
+      }
+      if (shouldPlay) {
+        await _player.play();
+      }
+      _qualityIndex = newIndex;
+    } catch (_) {
+      // Keep current stream if switching fails.
+    } finally {
+      _isSwitchingQuality = false;
+    }
+  }
+
+  Future<void> _initPlayer(model.Video video) async {
+    if (_isPlayerInitialized || _isOpeningPlayer) return;
+    _isOpeningPlayer = true;
+    try {
+      final urls = resolvePlayableVideoUrls(video);
+      if (urls.isEmpty) return;
+      _adaptiveUrls = urls;
+      _qualityIndex = 0;
+
+      Object? lastError;
+      var opened = false;
+      for (var i = 0; i < urls.length; i++) {
+        try {
+          await _player
+              .open(Media(urls[i]), play: false)
+              .timeout(const Duration(seconds: 8));
+          opened = true;
+          _qualityIndex = i;
+          break;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (!opened) {
+        debugPrint('Watch player failed to open all variants: $lastError');
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() => _isPlayerInitialized = true);
+      _player.play();
+      _startAdaptiveMonitor();
+      if (!kDataSaverEnabled) {
+        _suggestionsTimer?.cancel();
+        _suggestionsTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() => _canLoadSuggestions = true);
+          }
+        });
+      }
+    } finally {
+      _isOpeningPlayer = false;
+    }
   }
 
   @override
@@ -81,7 +180,17 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                       child: _isPlayerInitialized
                           ? Video(controller: _controller, controls: MaterialVideoControls)
                           : const Center(
-                              child: CircularProgressIndicator(color: OfgUi.accent),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(color: OfgUi.accent),
+                                  SizedBox(height: 10),
+                                  Text(
+                                    'Optimizing stream for your network...',
+                                    style: TextStyle(color: OfgUi.muted2, fontSize: 12),
+                                  ),
+                                ],
+                              ),
                             ),
                     ),
                   ),
@@ -113,9 +222,11 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                         const SizedBox(height: 14),
                         _buildCommentsTile(video.id),
                         const SizedBox(height: 14),
-                        OfgUi.sectionHeader(title: 'Up Next'),
-                        const SizedBox(height: 8),
-                        _buildSuggestions(),
+                        if (!kDataSaverEnabled) ...[
+                          OfgUi.sectionHeader(title: 'Up Next'),
+                          const SizedBox(height: 8),
+                          _buildSuggestions(),
+                        ],
                       ],
                     ),
                   ),
@@ -270,6 +381,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
 
   Widget _buildSuggestions() {
+    if (!_canLoadSuggestions) return const SizedBox.shrink();
     return ref.watch(suggestedVideosProvider(widget.videoId)).when(
           data: (list) => Column(children: list.map((v) => SuggestedVideoCard(video: v)).toList()),
           loading: () => const SizedBox.shrink(),

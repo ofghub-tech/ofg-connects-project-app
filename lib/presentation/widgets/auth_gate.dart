@@ -15,8 +15,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _setupPasswordController = TextEditingController();
-  final _confirmSetupPasswordController = TextEditingController();
   bool _isSignUp = false;
 
   @override
@@ -24,8 +22,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _setupPasswordController.dispose();
-    _confirmSetupPasswordController.dispose();
     super.dispose();
   }
 
@@ -34,8 +30,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     final authState = ref.watch(authProvider);
 
     ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.status == AuthStatus.authenticated &&
-          !next.requiresPasswordSetup) {
+      if (next.status == AuthStatus.authenticated) {
         context.go('/home');
       }
     });
@@ -57,9 +52,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                     ],
                   ),
                 )
-              : authState.requiresPasswordSetup
-                  ? _buildPasswordSetup()
-                  : _buildAuthForm(authState.errorMessage),
+              : _buildAuthForm(authState.errorMessage),
         ),
       ),
     );
@@ -170,13 +163,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                   },
                   child: Text(_isSignUp ? 'Create Account' : 'Login'),
                 ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      ref.read(authProvider.notifier).googleLogin(),
-                  icon: const Icon(Icons.login),
-                  label: const Text('Continue with Google'),
-                ),
                 if (errorMessage != null) ...[
                   const SizedBox(height: 10),
                   Text(
@@ -186,82 +172,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                         const TextStyle(color: Colors.redAccent, fontSize: 12),
                   ),
                 ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPasswordSetup() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: OfgUi.cardDecoration(elevated: true),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Set Password',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Cinzel',
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'You signed in with Google. Set a password now so you can also login with email + password.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: OfgUi.muted2, height: 1.5),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _setupPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'New Password'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _confirmSetupPasswordController,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: 'Confirm Password'),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () async {
-                    final password = _setupPasswordController.text.trim();
-                    final confirm = _confirmSetupPasswordController.text.trim();
-                    if (password.length < 8) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Password must be at least 8 characters.')),
-                      );
-                      return;
-                    }
-                    if (password != confirm) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Passwords do not match.')),
-                      );
-                      return;
-                    }
-
-                    await ref
-                        .read(authProvider.notifier)
-                        .completePasswordSetupForGoogle(password);
-                  },
-                  child: const Text('Save Password'),
-                ),
               ],
             ),
           ),

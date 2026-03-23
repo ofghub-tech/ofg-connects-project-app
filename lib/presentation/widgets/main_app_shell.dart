@@ -61,7 +61,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   bool _shouldShowAppBar(BuildContext context) {
     final String location = GoRouterState.of(context).uri.toString();
-    return location == '/home' || location == '/following';
+    // FIX: Use startsWith to ensure query params don't hide the AppBar
+    return location.startsWith('/home') || location.startsWith('/following');
   }
 
   @override
@@ -85,6 +86,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     const double navBarBottomMargin = 24;
     const double logoBottomPos = 35;
     const double logoSize = 75;
+
+    // FIX: Safely extract the avatar string
+    final String? avatarUrl = user?.prefs.data['avatar']?.toString();
+    final bool hasAvatar = avatarUrl != null && avatarUrl.trim().isNotEmpty;
 
     return Stack(
       children: [
@@ -163,19 +168,19 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           child: CircleAvatar(
                             radius: 18,
                             backgroundColor: Colors.grey[800],
-                            backgroundImage:
-                                (user?.prefs.data['avatar'] != null)
-                                    ? NetworkImage(user!.prefs.data['avatar'])
-                                    : null,
-                            child: (user?.prefs.data['avatar'] == null)
-                                ? Text(
-                                    user?.name.isNotEmpty == true
-                                        ? user!.name[0].toUpperCase()
-                                        : '?',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold))
-                                : null,
+                            // FIX: Using Image.network allows us to catch loading errors and show the initial
+                            child: hasAvatar
+                                ? ClipOval(
+                                    child: Image.network(
+                                      avatarUrl,
+                                      width: 36,
+                                      height: 36,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          _buildFallbackText(user),
+                                    ),
+                                  )
+                                : _buildFallbackText(user),
                           ),
                         ),
                       ),
@@ -296,6 +301,19 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             ),
           ),
       ],
+    );
+  }
+
+  // Fallback widget for when the avatar URL is missing or fails to load
+  Widget _buildFallbackText(dynamic user) {
+    return Text(
+      user?.name != null && user!.name.toString().isNotEmpty
+          ? user.name[0].toUpperCase()
+          : '?',
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 

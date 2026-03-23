@@ -1,10 +1,10 @@
 // lib/logic/interaction_provider.dart
 import 'package:appwrite/appwrite.dart';
-import 'package:appwrite/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:ofgconnects/logic/auth_provider.dart';
+import 'package:ofgconnects/logic/data_saver.dart';
 
 final databasesProvider = Provider<Databases>((ref) => Databases(AppwriteClient.client));
 
@@ -14,6 +14,7 @@ class InteractionLogic {
   Databases get _db => ref.read(databasesProvider);
 
   Future<void> logVideoView(String videoId) async {
+    if (kDataSaverEnabled) return;
     final user = ref.read(authProvider).user;
     if (user == null) return;
     try {
@@ -41,12 +42,12 @@ class InteractionLogic {
         collectionId: AppwriteClient.collectionIdVideos, 
         documentId: videoId
       );
-      final current = doc.data['viewCount'] ?? 0; 
+      final current = doc.data['view_count'] ?? 0; 
       await _db.updateDocument(
         databaseId: AppwriteClient.databaseId, 
         collectionId: AppwriteClient.collectionIdVideos, 
         documentId: videoId, 
-        data: {'viewCount': current + 1}
+        data: {'view_count': current + 1}
       );
     } catch (e) { debugPrint("View Increment Error: $e"); }
   }

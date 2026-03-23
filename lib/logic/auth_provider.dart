@@ -1,9 +1,7 @@
 // lib/logic/auth_provider.dart
 import 'dart:io';
 import 'package:appwrite/appwrite.dart';
-import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart' as models;
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ofgconnects/api/appwrite_client.dart';
 import 'package:path/path.dart' as p;
@@ -13,28 +11,23 @@ enum AuthStatus { loading, authenticated, unauthenticated }
 class AuthState {
   final AuthStatus status;
   final models.User? user;
-  final bool requiresPasswordSetup;
   final String? errorMessage;
 
   AuthState({
     this.status = AuthStatus.loading,
     this.user,
-    this.requiresPasswordSetup = false,
     this.errorMessage,
   });
 
   AuthState copyWith({
     AuthStatus? status,
     models.User? user,
-    bool? requiresPasswordSetup,
     String? errorMessage,
     bool clearError = false,
   }) {
     return AuthState(
       status: status ?? this.status,
       user: user ?? this.user,
-      requiresPasswordSetup:
-          requiresPasswordSetup ?? this.requiresPasswordSetup,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
@@ -47,9 +40,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final Account _account = AppwriteClient.account;
   final Storage _storage = AppwriteClient.storage;
-  final String _oauthCallbackScheme =
-      'appwrite-callback-${AppwriteClient.projectId}';
-  late final String _oauthCallbackUrl = '$_oauthCallbackScheme://auth';
 
   // RACE CONDITION FIX: Prevent overlapping auth calls
   bool _isAuthenticating = false;
@@ -64,34 +54,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = AuthState(
         status: AuthStatus.unauthenticated,
         user: null,
-        requiresPasswordSetup: false,
         errorMessage: null,
-      );
-    } finally {
-      _isAuthenticating = false;
-    }
-  }
-
-  Future<void> googleLogin() async {
-    if (_isAuthenticating) return;
-    _isAuthenticating = true;
-    try {
-      try {
-        await _account.deleteSession(sessionId: 'current');
-      } catch (_) {}
-      await _account.createOAuth2Session(
-        provider: OAuthProvider.google,
-        success: _oauthCallbackUrl,
-        failure: _oauthCallbackUrl,
-      );
-      await _refreshAuthenticatedState();
-    } catch (e) {
-      state = state.copyWith(
-        status: AuthStatus.unauthenticated,
-        user: null,
-        requiresPasswordSetup: false,
-        errorMessage: _readAuthError(e,
-            fallback: 'Google login failed. Please try again.'),
       );
     } finally {
       _isAuthenticating = false;
@@ -115,7 +78,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         user: null,
-        requiresPasswordSetup: false,
         errorMessage:
             _readAuthError(e, fallback: 'Email or password is incorrect.'),
       );
@@ -135,70 +97,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         await _account.deleteSession(sessionId: 'current');
       } catch (_) {}
-
-      final safeEmail = email.trim();
-      final safeName = name.trim().isEmpty ? 'OFG User' : name.trim();
-
       await _account.create(
         userId: ID.unique(),
-        email: safeEmail,
+        email: email.trim(),
         password: password,
-        name: safeName,
+        name: name.trim().isEmpty ? 'OFG User' : name.trim(),
       );
-
-      try {
-        await _account.createEmailPasswordSession(
-          email: safeEmail,
-          password: password,
-        );
-      } catch (e) {
-        final sessionError = _readAuthError(
-          e,
-          fallback:
-              'Account created, but automatic login failed. Please sign in manually.',
-        );
-        state = state.copyWith(
-          status: AuthStatus.unauthenticated,
-          user: null,
-          requiresPasswordSetup: false,
-          errorMessage: sessionError,
-        );
-        return;
-      }
-
-      try {
-        await _markPasswordAsSet();
-      } catch (e) {
-        debugPrint('Auth warning: could not set passwordSet pref: $e');
-      }
-
+      await _account.createEmailPasswordSession(
+          email: email.trim(), password: password);
       await _refreshAuthenticatedState();
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         user: null,
-        requiresPasswordSetup: false,
         errorMessage: _readAuthError(
           e,
           fallback: 'Sign up failed. Email may already be in use.',
         ),
-      );
-    } finally {
-      _isAuthenticating = false;
-    }
-  }
-
-  Future<void> completePasswordSetupForGoogle(String newPassword) async {
-    if (_isAuthenticating) return;
-    _isAuthenticating = true;
-    try {
-      await _account.updatePassword(password: newPassword);
-      await _markPasswordAsSet();
-      await checkUserStatus();
-    } catch (e) {
-      state = state.copyWith(
-        errorMessage: _readAuthError(e,
-            fallback: 'Could not set password. Please try again.'),
       );
     } finally {
       _isAuthenticating = false;
@@ -212,7 +127,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(
       status: AuthStatus.unauthenticated,
       user: null,
-      requiresPasswordSetup: false,
       clearError: true,
     );
   }
@@ -223,7 +137,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         user: null,
-        requiresPasswordSetup: false,
         clearError: true,
       );
     } catch (e) {
@@ -235,7 +148,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> updateUserProfile(
       {required String name, required String bio}) async {
     try {
-      // Defensive Copy
       final Map<String, dynamic> currentPrefs =
           Map<String, dynamic>.from(state.user?.prefs.data ?? {});
       currentPrefs['bio'] = bio;
@@ -243,10 +155,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _account.updateName(name: name);
       await _account.updatePrefs(prefs: currentPrefs);
 
-      // We manually update state here to avoid a full network refresh race
       if (state.user != null) {
-        // Note: Ideally re-fetch user, but for speed we can sometimes patch locally.
-        // For now, let's just re-fetch safely.
         await checkUserStatus();
       }
     } catch (e, st) {
@@ -280,7 +189,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       await _account.updatePrefs(prefs: currentPrefs);
-      // Don't await checkUserStatus here to keep UI snappy, just fire and forget or update local
       checkUserStatus();
     } catch (e) {
       print("Error updating ignored list: $e");
@@ -318,55 +226,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> _checkNeedsPasswordSetup(models.User user) async {
-    if (user.email.isEmpty) return false;
-    final prefs = user.prefs.data;
-    if (prefs['passwordSet'] == true) return false;
-    try {
-      final identities = await _account.listIdentities();
-      final hasGoogleIdentity = identities.identities
-          .any((identity) => identity.provider == 'google');
-      return hasGoogleIdentity;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _markPasswordAsSet() async {
-    final current = await _account.get();
-    final prefs = Map<String, dynamic>.from(current.prefs.data);
-    prefs['passwordSet'] = true;
-    await _account.updatePrefs(prefs: prefs);
-  }
-
   Future<void> _refreshAuthenticatedState() async {
     final currentUser = await _account.get();
-    final needsPasswordSetup = await _checkNeedsPasswordSetup(currentUser);
     state = state.copyWith(
       status: AuthStatus.authenticated,
       user: currentUser,
-      requiresPasswordSetup: needsPasswordSetup,
       clearError: true,
     );
   }
 
   String _readAuthError(Object error, {required String fallback}) {
     if (error is AppwriteException) {
-      debugPrint(
-          'Auth AppwriteException code=${error.code} type=${error.type} message=${error.message}');
       final msg = (error.message ?? '').trim();
       if (msg.isNotEmpty) return msg;
-
-      final type = (error.type ?? '').trim();
-      if (type.isNotEmpty) {
-        final code = error.code?.toString() ?? 'unknown';
-        return 'Auth error ($code/$type). Please verify your input and project auth settings.';
-      }
-
-      final raw = error.response?.toString().trim() ?? '';
-      if (raw.isNotEmpty) return raw;
     }
-    debugPrint('Auth generic error: $error');
     return fallback;
   }
 }

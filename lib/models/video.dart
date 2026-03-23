@@ -14,6 +14,8 @@ class Video {
   final String? url720p;
   final String? url480p;
   final String? url360p;
+  final String? url240p;
+  final String? url144p;
   
   final String compressionStatus;
   final String adminStatus; 
@@ -38,6 +40,8 @@ class Video {
     this.url720p,
     this.url480p,
     this.url360p,
+    this.url240p,
+    this.url144p,
     required this.compressionStatus,
     required this.adminStatus,
     required this.creatorId,
@@ -62,6 +66,8 @@ class Video {
       url720p: doc.data['url_720p'],
       url480p: doc.data['url_480p'],
       url360p: doc.data['url_360p'],
+      url240p: doc.data['url_240p'],
+      url144p: doc.data['url_144p'],
       
       compressionStatus: doc.data['compressionStatus'] ?? 'Processing',
       adminStatus: doc.data['adminStatus'] ?? 'pending',

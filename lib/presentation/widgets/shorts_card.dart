@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ofgconnects/models/video.dart';
+import 'package:ofgconnects/presentation/theme/ofg_ui.dart';
 
 class ShortsCard extends ConsumerWidget {
   final Video video;
@@ -15,6 +16,11 @@ class ShortsCard extends ConsumerWidget {
         context.push('/shorts?id=${video.id}');
       },
       child: Card(
+        color: OfgUi.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: OfgUi.border),
+        ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
@@ -35,7 +41,7 @@ class ShortsCard extends ConsumerWidget {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                    colors: [Colors.black.withOpacity(0.75), Colors.transparent],
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                   ),

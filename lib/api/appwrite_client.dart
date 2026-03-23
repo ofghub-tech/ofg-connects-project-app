@@ -7,19 +7,30 @@ class AppwriteClient {
   static final String? _endpoint = dotenv.env['APPWRITE_ENDPOINT'];
   static final String? _projectId = dotenv.env['APPWRITE_PROJECT_ID'];
   static final String? _databaseId = dotenv.env['APPWRITE_DATABASE_ID'];
-  static final String? _bucketIdVideos = dotenv.env['APPWRITE_BUCKET_ID_VIDEOS'];
-  static final String? _bucketIdThumbnails = dotenv.env['APPWRITE_BUCKET_ID_THUMBNAILS'];
+  static final String? _bucketIdVideos =
+      dotenv.env['APPWRITE_BUCKET_ID_VIDEOS'];
+  static final String? _bucketIdThumbnails =
+      dotenv.env['APPWRITE_BUCKET_ID_THUMBNAILS'];
   // --- NEW: Status Bucket ---
-  static final String? _bucketIdStatuses = dotenv.env['APPWRITE_BUCKET_ID_STATUSES'];
+  static final String? _bucketIdStatuses =
+      dotenv.env['APPWRITE_BUCKET_ID_STATUSES'];
 
-  static final String? _collectionIdVideos = dotenv.env['APPWRITE_COLLECTION_ID_VIDEOS'];
-  static final String? _collectionIdComments = dotenv.env['APPWRITE_COLLECTION_ID_COMMENTS'];
-  static final String? _collectionIdSubscriptions = dotenv.env['APPWRITE_COLLECTION_ID_SUBSCRIPTIONS'];
-  static final String? _collectionIdLikes = dotenv.env['APPWRITE_COLLECTION_ID_LIKES'];
-  static final String? _collectionIdBible = dotenv.env['APPWRITE_COLLECTION_ID_BIBLE'];
-  static final String? _collectionIdHistory = dotenv.env['APPWRITE_COLLECTION_ID_HISTORY'];
-  static final String? _collectionIdWatchLater = dotenv.env['APPWRITE_COLLECTION_ID_WATCH_LATER'];
-  static final String? _collectionIdStatuses = dotenv.env['APPWRITE_COLLECTION_ID_STATUSES'];
+  static final String? _collectionIdVideos =
+      dotenv.env['APPWRITE_COLLECTION_ID_VIDEOS'];
+  static final String? _collectionIdComments =
+      dotenv.env['APPWRITE_COLLECTION_ID_COMMENTS'];
+  static final String? _collectionIdSubscriptions =
+      dotenv.env['APPWRITE_COLLECTION_ID_SUBSCRIPTIONS'];
+  static final String? _collectionIdLikes =
+      dotenv.env['APPWRITE_COLLECTION_ID_LIKES'];
+  static final String? _collectionIdBible =
+      dotenv.env['APPWRITE_COLLECTION_ID_BIBLE'];
+  static final String? _collectionIdHistory =
+      dotenv.env['APPWRITE_COLLECTION_ID_HISTORY'];
+  static final String? _collectionIdWatchLater =
+      dotenv.env['APPWRITE_COLLECTION_ID_WATCH_LATER'];
+  static final String? _collectionIdStatuses =
+      dotenv.env['APPWRITE_COLLECTION_ID_STATUSES'];
 
   static final Client client = _initClient();
 
@@ -62,10 +73,11 @@ class AppwriteClient {
 
   // --- Export IDs ---
   static final String databaseId = _databaseId!;
+  static final String projectId = _projectId!;
   static final String bucketIdVideos = _bucketIdVideos!;
   static final String bucketIdThumbnails = _bucketIdThumbnails!;
   static final String bucketIdStatuses = _bucketIdStatuses!; // Exported
-  
+
   static final String collectionIdVideos = _collectionIdVideos!;
   static final String collectionIdComments = _collectionIdComments!;
   static final String collectionIdSubscriptions = _collectionIdSubscriptions!;

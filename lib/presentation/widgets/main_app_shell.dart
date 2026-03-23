@@ -28,18 +28,34 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   void _onItemTapped(int index, BuildContext context, WidgetRef ref) {
     switch (index) {
-      case 0: context.go('/home'); break;
-      case 1: context.go('/shorts'); break;
-      case 2: context.go('/upload'); break;
-      case 3: context.go('/following'); break;
-      case 4: context.go('/myspace'); break;
+      case 0:
+        context.go('/home');
+        break;
+      case 1:
+        context.go('/shorts');
+        break;
+      case 2:
+        context.go('/upload');
+        break;
+      case 3:
+        context.go('/following');
+        break;
+      case 4:
+        context.go('/myspace');
+        break;
     }
   }
 
-  void _onProfileMenuSelected(String value, WidgetRef ref, BuildContext context) {
+  void _onProfileMenuSelected(
+      String value, WidgetRef ref, BuildContext context) {
     switch (value) {
-      case 'settings': context.push('/settings'); break;
-      case 'logout': ref.read(authProvider.notifier).logoutUser(); break;
+      case 'settings':
+        context.push('/settings');
+        break;
+      case 'logout':
+        ref.read(authProvider.notifier).logoutUser();
+        context.go('/');
+        break;
     }
   }
 
@@ -52,30 +68,31 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   Widget build(BuildContext context) {
     final selectedIndex = _calculateSelectedIndex(context);
     final user = ref.watch(authProvider).user;
-    final bool isGuest = user == null || user.email.isEmpty;
+    final bool isSignedIn = user != null;
 
     final String location = GoRouterState.of(context).uri.toString();
     final bool isShortsPage = location.startsWith('/shorts');
-    
+
     final double bottomPadding = isShortsPage ? 0 : 100;
     final Size screenSize = MediaQuery.of(context).size;
 
     if (_bibleButtonPosition == null) {
-      _bibleButtonPosition = Offset(screenSize.width - 72, screenSize.height - 160);
+      _bibleButtonPosition =
+          Offset(screenSize.width - 72, screenSize.height - 160);
     }
 
     const double navBarHeight = 70;
     const double navBarBottomMargin = 24;
-    const double logoBottomPos = 35; 
+    const double logoBottomPos = 35;
     const double logoSize = 75;
 
     return Stack(
       children: [
         Scaffold(
-          extendBody: true, 
+          extendBody: true,
           appBar: _shouldShowAppBar(context)
               ? PreferredSize(
-                  preferredSize: const Size.fromHeight(60), 
+                  preferredSize: const Size.fromHeight(60),
                   child: AppBar(
                     automaticallyImplyLeading: false,
                     backgroundColor: Colors.transparent,
@@ -84,7 +101,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                     flexibleSpace: ClipRRect(
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.7)),
+                        child: Container(
+                            color: Theme.of(context)
+                                .scaffoldBackgroundColor
+                                .withOpacity(0.7)),
                       ),
                     ),
                     title: GestureDetector(
@@ -94,9 +114,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         child: Text(
                           'OFG',
                           style: TextStyle(
-                            color: Colors.white, 
+                            color: Colors.white,
                             fontWeight: FontWeight.w900,
-                            fontSize: 28, 
+                            fontSize: 28,
                             letterSpacing: 2.0,
                           ),
                         ),
@@ -104,33 +124,36 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                     ),
                     centerTitle: false,
                     actions: [
-                      if (isGuest)
-                        TextButton(
-                          onPressed: () => ref.read(authProvider.notifier).googleLogin(),
-                          child: const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      _buildCircleAction(context, Icons.search_rounded, () => context.push('/search')),
+                      _buildCircleAction(context, Icons.search_rounded,
+                          () => context.push('/search')),
                       const SizedBox(width: 8),
                       PopupMenuButton<String>(
                         offset: const Offset(0, 50),
                         color: const Color(0xFF1E1E1E),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        onSelected: (value) => _onProfileMenuSelected(value, ref, context),
-                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        onSelected: (value) =>
+                            _onProfileMenuSelected(value, ref, context),
+                        itemBuilder: (BuildContext context) =>
+                            <PopupMenuEntry<String>>[
                           const PopupMenuItem<String>(
                             value: 'settings',
                             child: ListTile(
-                              leading: Icon(Icons.settings_outlined, color: Colors.white),
-                              title: Text('Settings', style: TextStyle(color: Colors.white)),
+                              leading: Icon(Icons.settings_outlined,
+                                  color: Colors.white),
+                              title: Text('Settings',
+                                  style: TextStyle(color: Colors.white)),
                               contentPadding: EdgeInsets.zero,
                             ),
                           ),
-                          if (!isGuest)
+                          if (isSignedIn)
                             const PopupMenuItem<String>(
                               value: 'logout',
                               child: ListTile(
-                                leading: Icon(Icons.logout, color: Colors.redAccent),
-                                title: Text('Logout', style: TextStyle(color: Colors.redAccent)),
+                                leading:
+                                    Icon(Icons.logout, color: Colors.redAccent),
+                                title: Text('Logout',
+                                    style: TextStyle(color: Colors.redAccent)),
                                 contentPadding: EdgeInsets.zero,
                               ),
                             ),
@@ -140,9 +163,18 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           child: CircleAvatar(
                             radius: 18,
                             backgroundColor: Colors.grey[800],
-                            backgroundImage: (user?.prefs.data['avatar'] != null) ? NetworkImage(user!.prefs.data['avatar']) : null,
+                            backgroundImage:
+                                (user?.prefs.data['avatar'] != null)
+                                    ? NetworkImage(user!.prefs.data['avatar'])
+                                    : null,
                             child: (user?.prefs.data['avatar'] == null)
-                                ? Text(isGuest ? 'G' : user!.name[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                                ? Text(
+                                    user?.name.isNotEmpty == true
+                                        ? user!.name[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold))
                                 : null,
                           ),
                         ),
@@ -151,7 +183,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                   ),
                 )
               : null,
-          
           body: Padding(
             padding: EdgeInsets.only(bottom: bottomPadding),
             child: widget.child,
@@ -161,23 +192,27 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         // CUSTOM FLOATING NAVIGATION BAR - Hidden on Shorts
         if (!isShortsPage)
           Positioned(
-            left: 0, 
-            right: 0, 
+            left: 0,
+            right: 0,
             bottom: 0,
             child: SizedBox(
-              height: 140, 
+              height: 140,
               child: Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.bottomCenter,
                 children: [
                   Container(
-                    margin: const EdgeInsets.only(left: 16, right: 16, bottom: navBarBottomMargin),
+                    margin: const EdgeInsets.only(
+                        left: 16, right: 16, bottom: navBarBottomMargin),
                     height: navBarHeight,
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(35),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10))
                       ],
                     ),
                     child: ClipRRect(
@@ -189,11 +224,20 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              _buildNavItem(context, Icons.home_rounded, Icons.home_outlined, 0, selectedIndex, ref),
-                              _buildNavItem(context, Icons.play_arrow_rounded, Icons.play_arrow_outlined, 1, selectedIndex, ref),
+                              _buildNavItem(context, Icons.home_rounded,
+                                  Icons.home_outlined, 0, selectedIndex, ref),
+                              _buildNavItem(
+                                  context,
+                                  Icons.play_arrow_rounded,
+                                  Icons.play_arrow_outlined,
+                                  1,
+                                  selectedIndex,
+                                  ref),
                               const SizedBox(width: 60),
-                              _buildNavItem(context, Icons.people_rounded, Icons.people_outline, 3, selectedIndex, ref),
-                              _buildNavItem(context, Icons.person_rounded, Icons.person_outline, 4, selectedIndex, ref),
+                              _buildNavItem(context, Icons.people_rounded,
+                                  Icons.people_outline, 3, selectedIndex, ref),
+                              _buildNavItem(context, Icons.person_rounded,
+                                  Icons.person_outline, 4, selectedIndex, ref),
                             ],
                           ),
                         ),
@@ -205,13 +249,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                     child: GestureDetector(
                       onTap: () => _onItemTapped(2, context, ref),
                       child: SizedBox(
-                        width: logoSize, 
+                        width: logoSize,
                         height: logoSize,
                         child: Image.asset(
-                          'assets/logo.png', 
+                          'assets/logo.png',
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => 
-                            const Icon(Icons.add_circle, size: 60, color: Colors.blueAccent),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.add_circle,
+                                  size: 60, color: Colors.blueAccent),
                         ),
                       ),
                     ),
@@ -222,7 +267,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
           ),
 
         // DRAGGABLE BIBLE BUTTON - Hidden on Shorts
-        if (!isShortsPage) 
+        if (!isShortsPage)
           Positioned(
             left: _bibleButtonPosition!.dx,
             top: _bibleButtonPosition!.dy,
@@ -244,7 +289,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 onPressed: () => context.push('/bible'),
                 backgroundColor: Colors.blueAccent,
                 elevation: 8,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 child: const Icon(Icons.menu_book_rounded, color: Colors.white),
               ),
             ),
@@ -253,7 +299,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     );
   }
 
-  Widget _buildNavItem(BuildContext context, IconData activeIcon, IconData inactiveIcon, int index, int selectedIndex, WidgetRef ref) {
+  Widget _buildNavItem(BuildContext context, IconData activeIcon,
+      IconData inactiveIcon, int index, int selectedIndex, WidgetRef ref) {
     final isSelected = index == selectedIndex;
     return GestureDetector(
       onTap: () => _onItemTapped(index, context, ref),
@@ -270,13 +317,15 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     );
   }
 
-  Widget _buildCircleAction(BuildContext context, IconData icon, VoidCallback onTap) {
+  Widget _buildCircleAction(
+      BuildContext context, IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.08)),
+        decoration: BoxDecoration(
+            shape: BoxShape.circle, color: Colors.white.withOpacity(0.08)),
         child: Icon(icon, size: 22, color: Colors.white),
       ),
     );

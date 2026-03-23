@@ -1,17 +1,17 @@
-// lib/presentation/pages/watch_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import 'package:ofgconnects/api/appwrite_client.dart';
-import 'package:ofgconnects/logic/video_provider.dart';
 import 'package:ofgconnects/logic/interaction_provider.dart';
 import 'package:ofgconnects/logic/subscription_provider.dart';
+import 'package:ofgconnects/logic/video_provider.dart';
 import 'package:ofgconnects/models/video.dart' as model;
+import 'package:ofgconnects/presentation/theme/ofg_ui.dart';
 import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
 import 'package:ofgconnects/presentation/widgets/suggested_video_card.dart';
 
@@ -44,17 +44,14 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
   Future<void> _initPlayer(model.Video video) async {
     if (_isPlayerInitialized) return;
-    
-    // --- CHANGED: Use 360p if compressed (for speed), else fallback to original ---
-    String url = video.compressionStatus == 'Done' 
-        ? (video.url360p ?? video.videoUrl) 
+    String url = video.compressionStatus == 'Done'
+        ? (video.url360p ?? video.videoUrl)
         : video.videoUrl;
-
-    // Handle Appwrite File IDs (if not a full URL)
     if (!url.startsWith('http')) {
-      url = AppwriteClient.storage.getFileView(bucketId: AppwriteClient.bucketIdVideos, fileId: url).toString();
+      url = AppwriteClient.storage
+          .getFileView(bucketId: AppwriteClient.bucketIdVideos, fileId: url)
+          .toString();
     }
-
     await _player.open(Media(url));
     if (mounted) setState(() => _isPlayerInitialized = true);
   }
@@ -65,54 +62,65 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     final isSaved = ref.watch(isSavedProvider(widget.videoId)).value ?? false;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
+      backgroundColor: OfgUi.bg,
       body: SafeArea(
         child: videoAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Center(child: Text("Error: $err")),
+          error: (err, _) => Center(child: Text('Error: $err')),
           data: (video) {
             _initPlayer(video);
             final isFollowing = ref.watch(isFollowingProvider(video.creatorId)).value ?? false;
-
-            return Column(
-              children: [
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Container(
-                    color: Colors.black,
-                    child: _isPlayerInitialized 
-                        ? Video(controller: _controller, controls: MaterialVideoControls)
-                        : const Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
+            return Container(
+              decoration: const BoxDecoration(gradient: OfgUi.appBackground),
+              child: Column(
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Container(
+                      color: Colors.black,
+                      child: _isPlayerInitialized
+                          ? Video(controller: _controller, controls: MaterialVideoControls)
+                          : const Center(
+                              child: CircularProgressIndicator(color: OfgUi.accent),
+                            ),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(video.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: Text("${NumberFormat.compact().format(video.viewCount)} views • ${timeago.format(video.createdAt)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                      ),
-                      _buildActionRow(video, isSaved), 
-                      const Divider(color: Colors.white10),
-                      _buildCreatorRow(video, isFollowing),
-                      const Divider(color: Colors.white10),
-                      ListTile(
-                        onTap: () => _showComments(video.id),
-                        title: const Text("Comments", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        trailing: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                        subtitle: Text("Add a comment...", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                      ),
-                      const Divider(color: Colors.white10),
-                      _buildSuggestions(),
-                    ],
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                      children: [
+                        Text(
+                          video.title,
+                          style: const TextStyle(
+                            fontFamily: 'Cinzel',
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${NumberFormat.compact().format(video.viewCount)} views - ${timeago.format(video.createdAt)}',
+                          style: const TextStyle(color: OfgUi.muted2, fontSize: 12),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildActionBar(video, isSaved),
+                        const SizedBox(height: 14),
+                        _buildCreatorRow(video, isFollowing),
+                        const SizedBox(height: 12),
+                        _buildDescription(video),
+                        const SizedBox(height: 14),
+                        _buildCommentsTile(video.id),
+                        const SizedBox(height: 14),
+                        OfgUi.sectionHeader(title: 'Up Next'),
+                        const SizedBox(height: 8),
+                        _buildSuggestions(),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -120,45 +128,153 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     );
   }
 
-  Widget _buildActionRow(model.Video video, bool isSaved) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  Widget _buildActionBar(model.Video video, bool isSaved) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: OfgUi.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
-          _actionBtn(Icons.share_outlined, "Share", false, 
-            () => Share.share("Check this out: ${video.title}\n${video.videoUrl}")),
-          const SizedBox(width: 8),
-          _actionBtn(isSaved ? Icons.bookmark : Icons.bookmark_outline, "Save", isSaved, 
-            () => ref.read(isSavedProvider(widget.videoId).notifier).toggle()),
+          Expanded(
+            child: _actionCell(
+              icon: Icons.share_outlined,
+              label: 'Share',
+              active: false,
+              onTap: () => Share.share('Check this out: ${video.title}\n${video.videoUrl}'),
+            ),
+          ),
+          Expanded(
+            child: _actionCell(
+              icon: isSaved ? Icons.bookmark : Icons.bookmark_outline,
+              label: 'Save',
+              active: isSaved,
+              onTap: () => ref.read(isSavedProvider(widget.videoId).notifier).toggle(),
+            ),
+          ),
+          Expanded(
+            child: _actionCell(
+              icon: Icons.chat_bubble_outline_rounded,
+              label: 'Comment',
+              active: false,
+              onTap: () => _showComments(video.id),
+            ),
+          ),
         ],
       ),
     );
   }
 
+  Widget _actionCell({
+    required IconData icon,
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: active ? OfgUi.accent : OfgUi.muted2, size: 19),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? OfgUi.accent : OfgUi.muted2,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCreatorRow(model.Video video, bool isFollowing) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: OfgUi.cardDecoration(),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: OfgUi.accent,
+            child: Text(
+              video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : 'U',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  video.creatorName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text('Content Creator', style: TextStyle(color: OfgUi.muted2, fontSize: 11)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => isFollowing
+                ? ref.read(subscriptionNotifierProvider.notifier).unfollowUser(video.creatorId)
+                : ref
+                    .read(subscriptionNotifierProvider.notifier)
+                    .followUser(creatorId: video.creatorId, creatorName: video.creatorName),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isFollowing ? OfgUi.surface2 : OfgUi.accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: Text(isFollowing ? 'Following' : 'Follow'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDescription(model.Video video) {
+    if (video.description.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: OfgUi.cardDecoration(),
+      child: Text(
+        video.description,
+        style: const TextStyle(color: OfgUi.muted2, fontSize: 13, height: 1.6),
+      ),
+    );
+  }
+
+  Widget _buildCommentsTile(String videoId) {
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.blueAccent, 
-        child: Text(video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : 'U')
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      onTap: () => _showComments(videoId),
+      title: const Text(
+        'Comments',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
       ),
-      title: Text(video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      trailing: ElevatedButton(
-        onPressed: () => isFollowing 
-            ? ref.read(subscriptionNotifierProvider.notifier).unfollowUser(video.creatorId)
-            : ref.read(subscriptionNotifierProvider.notifier).followUser(creatorId: video.creatorId, creatorName: video.creatorName),
-        style: ElevatedButton.styleFrom(backgroundColor: isFollowing ? Colors.white12 : Colors.white),
-        child: Text(isFollowing ? "Following" : "Follow", style: TextStyle(color: isFollowing ? Colors.white : Colors.black)),
-      ),
+      trailing: const Icon(Icons.keyboard_arrow_down_rounded, color: OfgUi.muted2),
+      subtitle: const Text('Add a comment...', style: TextStyle(color: OfgUi.muted2, fontSize: 12)),
     );
   }
 
   Widget _buildSuggestions() {
     return ref.watch(suggestedVideosProvider(widget.videoId)).when(
-      data: (list) => Column(children: list.map((v) => SuggestedVideoCard(video: v)).toList()),
-      loading: () => const SizedBox(),
-      error: (_, __) => const SizedBox(),
-    );
+          data: (list) => Column(children: list.map((v) => SuggestedVideoCard(video: v)).toList()),
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        );
   }
 
   void _showComments(String videoId) {
@@ -170,28 +286,6 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         initialChildSize: 0.75,
         maxChildSize: 0.95,
         builder: (_, ctrl) => CommentsSheet(videoId: videoId, scrollController: ctrl),
-      ),
-    );
-  }
-
-  Widget _actionBtn(IconData icon, String label, bool active, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? Colors.blueAccent.withOpacity(0.2) : Colors.white12, 
-          borderRadius: BorderRadius.circular(20),
-          border: active ? Border.all(color: Colors.blueAccent.withOpacity(0.5)) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: active ? Colors.blueAccent : Colors.white), 
-            const SizedBox(width: 8), 
-            Text(label, style: TextStyle(color: active ? Colors.blueAccent : Colors.white, fontSize: 13, fontWeight: active ? FontWeight.bold : FontWeight.normal))
-          ]
-        ),
       ),
     );
   }

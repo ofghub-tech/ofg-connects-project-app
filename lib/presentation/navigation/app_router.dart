@@ -19,6 +19,8 @@ import 'package:ofgconnects/presentation/pages/user_profile_page.dart';
 import 'package:ofgconnects/presentation/pages/create_status_page.dart';
 import 'package:ofgconnects/presentation/pages/status_view_page.dart';
 import 'package:ofgconnects/presentation/pages/edit_profile_page.dart';
+import 'package:ofgconnects/presentation/pages/music_page.dart';
+import 'package:ofgconnects/presentation/pages/kids_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) => router);
 
@@ -52,6 +54,8 @@ final router = GoRouter(
         GoRoute(path: '/bible', builder: (context, state) => const BiblePage()),
         GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
         GoRoute(path: '/search', builder: (context, state) => const SearchPage()),
+        GoRoute(path: '/music', builder: (context, state) => const MusicPage()),
+        GoRoute(path: '/kids', builder: (context, state) => const KidsPage()),
         GoRoute(
           path: '/profile/:userId',
           builder: (context, state) => UserProfilePage(

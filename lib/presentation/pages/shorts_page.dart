@@ -10,6 +10,7 @@ import 'package:ofgconnects/logic/shorts_provider.dart';
 import 'package:ofgconnects/models/video.dart';
 import 'package:ofgconnects/presentation/widgets/shorts_player.dart';
 import 'package:ofgconnects/presentation/widgets/comments_sheet.dart';
+import 'package:ofgconnects/presentation/theme/ofg_ui.dart';
 
 // NOTE: shortsPlayPauseProvider removed from here (it is now in logic/shorts_provider.dart)
 
@@ -128,6 +129,37 @@ class _ShortsItem extends ConsumerWidget {
 
     return Stack(
       children: [
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          left: 14,
+          right: 14,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Text(
+                  'SHORTS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -168,7 +200,7 @@ class _ShortsItem extends ConsumerWidget {
               _InteractionButton(
                 icon: isSaved ? Icons.bookmark : Icons.bookmark_outline,
                 label: isSaved ? "Saved" : "Save",
-                color: isSaved ? Colors.blueAccent : Colors.white,
+                color: isSaved ? OfgUi.accent : Colors.white,
                 onTap: () => ref.read(isSavedProvider(video.id).notifier).toggle(),
               ),
             ],
@@ -188,7 +220,7 @@ class _ShortsItem extends ConsumerWidget {
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: OfgUi.accent,
                     child: Text(
                       video.creatorName.isNotEmpty ? video.creatorName[0].toUpperCase() : '?', 
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -246,7 +278,10 @@ class _FollowButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(color: isFollowing ? Colors.white.withOpacity(0.2) : Colors.white, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(
+          color: isFollowing ? Colors.white.withOpacity(0.2) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Text(isFollowing ? "Following" : "Follow", style: TextStyle(color: isFollowing ? Colors.white : Colors.black, fontSize: 11, fontWeight: FontWeight.bold)),
       ),
     );

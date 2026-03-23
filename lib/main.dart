@@ -7,6 +7,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:media_kit/media_kit.dart'; 
 import 'package:ofgconnects/presentation/navigation/app_router.dart'; 
 import 'package:ofgconnects/logic/auth_provider.dart';
+import 'package:ofgconnects/presentation/theme/ofg_ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,8 +83,15 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F0F0F),
-        primaryColor: Colors.blueAccent,
+        scaffoldBackgroundColor: OfgUi.bg,
+        primaryColor: OfgUi.accent,
+        dividerColor: OfgUi.border,
+        colorScheme: const ColorScheme.dark(
+          primary: OfgUi.accent,
+          secondary: OfgUi.accentWarm,
+          surface: OfgUi.surface,
+          outline: OfgUi.border,
+        ),
         
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
@@ -121,7 +129,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.blueAccent, width: 1.5),
+            borderSide: const BorderSide(color: OfgUi.accent, width: 1.5),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -131,10 +139,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blueAccent,
+            backgroundColor: OfgUi.accent,
             foregroundColor: Colors.white,
             elevation: 4,
-            shadowColor: Colors.blueAccent.withOpacity(0.4),
+            shadowColor: OfgUi.accent.withOpacity(0.4),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -142,9 +150,15 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         ),
         
         textTheme: const TextTheme(
-          headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+          headlineSmall: TextStyle(
+            fontFamily: 'Cinzel',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: OfgUi.text,
+            letterSpacing: 0.2,
+          ),
           titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3),
-          bodyMedium: TextStyle(fontSize: 14, color: Colors.white70),
+          bodyMedium: TextStyle(fontSize: 14, color: OfgUi.muted2),
         ),
       ),
     );
